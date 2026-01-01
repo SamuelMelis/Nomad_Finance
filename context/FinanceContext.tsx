@@ -43,6 +43,9 @@ const LS_KEYS = {
 };
 
 const ALLOWED_USERNAME = 'samuel_melis';
+// Internal credentials for seamless auth (Zero-Interaction)
+const AUTO_EMAIL = 'tg_samuel_melis@nomadfinance.app';
+const AUTO_PASS = 'Nomad_Internal_Secret_2024!'; 
 
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -77,10 +80,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     const safetyTimeout = setTimeout(() => {
         if (mounted && loading) {
-            console.warn("Auth check timed out, releasing lock.");
+            console.warn("Auth check timed out.");
             setLoading(false);
         }
-    }, 4000); 
+    }, 6000); // Increased timeout for auto-login latency
 
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
@@ -109,29 +112,62 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           setTelegramUser(tgUser);
           
           // STRICT ACCESS CONTROL
-          // Only allow 'samuel_melis' (case insensitive)
           const isAllowed = tgUser.username && tgUser.username.toLowerCase() === ALLOWED_USERNAME;
           
           if (isAllowed) {
-              // Access Granted:
-              // We disable Demo Mode to enforce Cloud Sync (Supabase).
               setIsDemoMode(false);
               
               if (existingSession) {
                   setSession(existingSession);
                   setLoading(false);
               } else {
-                  // No session yet -> Stop loading so <Auth /> renders and asks for password
+                  // --- AUTOMATIC LOGIN SEQUENCE ---
+                  // No password prompt. Backend logic.
+                  console.log("Attempting auto-login for allowed user...");
+                  
+                  // 1. Try Login
+                  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                      email: AUTO_EMAIL,
+                      password: AUTO_PASS
+                  });
+
+                  if (signInData.session) {
+                      setSession(signInData.session);
+                      setLoading(false);
+                      return;
+                  }
+
+                  // 2. If Login failed, Try Register (First time use)
+                  if (signInError) {
+                      console.log("Auto-login failed, attempting auto-registration...", signInError.message);
+                      
+                      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                          email: AUTO_EMAIL,
+                          password: AUTO_PASS,
+                          options: {
+                              data: {
+                                  username: tgUser.username,
+                                  full_name: tgUser.first_name
+                              }
+                          }
+                      });
+
+                      if (signUpData.session) {
+                          setSession(signUpData.session);
+                      } else {
+                          console.error("Auto-registration failed:", signUpError);
+                          // Loading stays true or false? 
+                          // Set false to let Auth component show generic error
+                      }
+                  }
                   setLoading(false);
               }
           } else {
-              // Access Denied
-              // Stop loading so <Auth /> renders and shows "Access Denied" message
+              // Access Denied for non-Samuel
               setLoading(false);
           }
       } else {
-          // Fallback for browser testing or non-telegram environment
-          // If in browser (dev), allow checking existing session or show Auth
+          // Fallback for browser dev
           if (existingSession) {
              if (mounted) {
                  setSession(existingSession);
@@ -150,7 +186,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
-        // If we get a session update, we are definitely done loading
         if (session) setLoading(false);
       }
     });
@@ -174,7 +209,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [session, loading, isDemoMode]);
 
   const fetchLocalData = () => {
-      // Local Storage Logic (fallback only)
       try {
           const lExp = localStorage.getItem(LS_KEYS.EXPENSES);
           const lInc = localStorage.getItem(LS_KEYS.INCOMES);
@@ -247,7 +281,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const newExpense = { ...expense, id: tempId };
     const updatedExpenses = [newExpense, ...expenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-    // Optimistic Update
     setExpenses(updatedExpenses);
     triggerHaptic('success');
 
@@ -263,11 +296,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
         if (error) {
             triggerHaptic('error');
-            // Revert
             setExpenses(prev => prev.filter(e => e.id !== tempId));
-        } else {
-            // Optional: Re-fetch to confirm ID
-            // fetchCloudData(); 
         }
     } else if (isDemoMode) {
         localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
