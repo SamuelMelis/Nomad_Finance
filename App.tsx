@@ -27,12 +27,10 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // LOGIC UPDATE: 
   // Show Auth if:
   // 1. No Session exists
   // 2. AND Not in Demo Mode
   // 3. AND Not in Telegram Environment (or if in Telegram, unauthorized)
-  // This allows @Samuel_Melis to skip Auth and fall back to LocalStorage in FinanceContext
   const showAuth = !authSession && !isDemoMode && !isTelegramEnv;
 
   if (showAuth) {
@@ -54,10 +52,10 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-white text-[#18181b] font-sans selection:bg-[#18181b] selection:text-white">
       <div className="max-w-md mx-auto min-h-screen relative bg-white border-x border-gray-50 shadow-2xl">
         
-        {/* Main Content Area - Safe Area Padding via inline style for CSS calc safety */}
+        {/* Main Content Area - Increased top padding for Telegram Header safety */}
         <main 
-          className="px-6 min-h-screen"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.5rem)' }}
+          className="px-5 min-h-screen"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 4rem)' }}
         >
           {renderTab()}
         </main>
@@ -65,8 +63,8 @@ const AppContent: React.FC = () => {
         {/* Bottom Navigation */}
         {!isTabBarHidden && (
             <nav 
-              className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 pt-4 px-6 z-50 max-w-md mx-auto animate-in slide-in-from-bottom-full duration-300"
-              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+              className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 pt-3 px-6 z-50 max-w-md mx-auto"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
             >
             <div className="flex justify-between items-center">
                 
@@ -118,8 +116,8 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.El
     onClick={onClick}
     className="group flex flex-col items-center gap-1 min-w-[3.5rem]"
   >
-    <div className={`p-2 rounded-xl transition-all duration-300 ${active ? 'bg-[#18181b] text-white shadow-lg shadow-[#18181b]/20 transform -translate-y-1' : 'text-gray-300 group-hover:text-[#18181b] group-hover:bg-gray-50'}`}>
-       <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+    <div className={`p-1.5 rounded-xl transition-all duration-300 ${active ? 'bg-[#18181b] text-white shadow-md shadow-[#18181b]/20 transform -translate-y-1' : 'text-gray-300 group-hover:text-[#18181b] group-hover:bg-gray-50'}`}>
+       <Icon size={18} strokeWidth={active ? 2.5 : 2} />
     </div>
     <span className={`text-[9px] font-bold tracking-widest uppercase transition-colors ${active ? 'text-[#18181b]' : 'text-transparent group-hover:text-gray-300'}`}>{label}</span>
   </button>

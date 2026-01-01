@@ -70,7 +70,7 @@ export const IncomeTab: React.FC = () => {
       case 'Cash': return Wallet;
       case 'Item': return ShoppingBag;
       case 'Loan': return CreditCard;
-      case 'Lent': return Coins; // Using Coins instead of HandCoins for compatibility
+      case 'Lent': return Coins; 
       default: return Wallet;
     }
   };
@@ -82,29 +82,28 @@ export const IncomeTab: React.FC = () => {
   });
 
   return (
-    <div className="space-y-8 pb-32 animate-in fade-in duration-500">
+    <div className="space-y-6 pb-24 animate-in fade-in duration-500">
       
       {/* Header */}
-      <div className="pt-2">
-        <h1 className="text-3xl font-bold tracking-tight text-[#18181b] mb-2">Income & Assets</h1>
-        <p className="text-sm text-gray-500 font-medium">Manage revenue & net worth</p>
+      <div className="flex justify-between items-end border-b border-[#18181b]/10 pb-2">
+        <h1 className="text-2xl font-bold tracking-tight text-[#18181b]">Income & Assets</h1>
       </div>
 
-      {/* Hero Card */}
-      <div className="bg-gradient-to-br from-[#18181b] to-[#27272a] text-white p-8 rounded-3xl shadow-2xl">
-        <div className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-4">Total Net Assets</div>
-        <div className="text-5xl font-bold tracking-tighter mb-8 flex items-baseline gap-2">
-          ${totalAssets.toLocaleString()} <span className="text-lg font-medium text-gray-600">USD</span>
+      {/* Hero Card - Compacted */}
+      <div className="bg-gradient-to-br from-[#18181b] to-[#27272a] text-white p-5 rounded-2xl shadow-lg">
+        <div className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1">Total Net Assets</div>
+        <div className="text-3xl font-bold tracking-tighter mb-4 flex items-baseline gap-2">
+          ${totalAssets.toLocaleString()} <span className="text-xs font-medium text-gray-500">USD</span>
         </div>
         
-        <div className="grid grid-cols-2 gap-8 border-t border-gray-800 pt-6">
+        <div className="grid grid-cols-2 gap-4 border-t border-gray-800 pt-3">
           <div>
-            <div className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-1">Monthly Stable</div>
-            <div className="text-xl font-bold font-mono tracking-tight">${totalStable.toLocaleString()}</div>
+            <div className="text-gray-500 text-[9px] uppercase tracking-widest font-bold mb-0.5">Monthly Stable</div>
+            <div className="text-lg font-bold font-mono tracking-tight">${totalStable.toLocaleString()}</div>
           </div>
           <div>
-            <div className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-1">Monthly Var.</div>
-            <div className="text-xl font-bold font-mono tracking-tight">${totalVariable.toLocaleString()}</div>
+            <div className="text-gray-500 text-[9px] uppercase tracking-widest font-bold mb-0.5">Monthly Var.</div>
+            <div className="text-lg font-bold font-mono tracking-tight">${totalVariable.toLocaleString()}</div>
           </div>
         </div>
       </div>
@@ -114,73 +113,72 @@ export const IncomeTab: React.FC = () => {
         {!showIncomeForm ? (
             <button 
               onClick={() => setShowIncomeForm(true)}
-              className="w-full bg-white py-4 px-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-[#18181b] active:scale-[0.99] transition-all"
+              className="w-full bg-white py-3 px-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-[#18181b] active:scale-[0.99] transition-all"
             >
               <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-[#18181b] border border-gray-100 group-hover:bg-[#18181b] group-hover:text-white group-hover:border-[#18181b] transition-colors">
-                    <Plus size={20} />
+                 <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center text-[#18181b] border border-gray-100 group-hover:bg-[#18181b] group-hover:text-white group-hover:border-[#18181b] transition-colors">
+                    <Plus size={18} />
                  </div>
                  <div className="text-left">
-                    <span className="block text-sm font-bold text-[#18181b]">Record New Income</span>
-                    <span className="block text-[10px] text-gray-400 font-medium uppercase tracking-wider">Add stable or variable revenue</span>
+                    <span className="block text-xs font-bold text-[#18181b]">Record New Income</span>
                  </div>
               </div>
             </button>
         ) : (
-            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 animate-in fade-in slide-in-from-top-4">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-[#18181b] font-bold text-xs uppercase tracking-widest">Add New Stream</h3>
+            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 animate-in fade-in slide-in-from-top-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[#18181b] font-bold text-[10px] uppercase tracking-widest">Add New Stream</h3>
                   <button 
                       type="button"
                       onClick={() => setShowIncomeForm(false)}
-                      className="w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-400 flex items-center justify-center hover:text-[#18181b] hover:border-[#18181b] transition-all"
+                      className="w-7 h-7 rounded-full bg-white border border-gray-200 text-gray-400 flex items-center justify-center hover:text-[#18181b] hover:border-[#18181b] transition-all"
                   >
-                      <X size={14} />
+                      <X size={12} />
                   </button>
                 </div>
-                <form onSubmit={handleAddIncome} className="space-y-4">
+                <form onSubmit={handleAddIncome} className="space-y-3">
                   <div className="grid grid-cols-2 gap-2 bg-white p-1 rounded-xl border border-gray-100">
                       <button
                       type="button"
                       onClick={() => setType('Stable')}
-                      className={`py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${type === 'Stable' ? 'bg-[#18181b] text-white shadow-md' : 'text-gray-400 hover:text-[#18181b]'}`}
+                      className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${type === 'Stable' ? 'bg-[#18181b] text-white shadow-md' : 'text-gray-400 hover:text-[#18181b]'}`}
                       >
-                      <Briefcase size={14} />
+                      <Briefcase size={12} />
                       Stable
                       </button>
                       <button
                       type="button"
                       onClick={() => setType('Variable')}
-                      className={`py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${type === 'Variable' ? 'bg-[#18181b] text-white shadow-md' : 'text-gray-400 hover:text-[#18181b]'}`}
+                      className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${type === 'Variable' ? 'bg-[#18181b] text-white shadow-md' : 'text-gray-400 hover:text-[#18181b]'}`}
                       >
-                      <TrendingUp size={14} />
+                      <TrendingUp size={12} />
                       Variable
                       </button>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                       <input 
                       type="text" 
                       value={source}
                       onChange={e => setSource(e.target.value)}
-                      placeholder={type === 'Stable' ? "Client Name / Source" : "Project / Gig Name"}
-                      className="w-full h-14 px-5 bg-white rounded-xl border border-gray-200 text-sm font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
+                      placeholder={type === 'Stable' ? "Client Name" : "Project Name"}
+                      className="w-full h-10 px-4 bg-white rounded-xl border border-gray-200 text-xs font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
                       autoFocus
                       />
                       
-                      <div className="flex gap-3">
+                      <div className="flex gap-2">
                       <input 
                           type="number" 
                           value={amount}
                           onChange={e => setAmount(e.target.value)}
                           placeholder="Amount (USD)"
-                          className="flex-1 h-14 px-5 bg-white rounded-xl border border-gray-200 text-sm font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
+                          className="flex-1 h-10 px-4 bg-white rounded-xl border border-gray-200 text-xs font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
                       />
                       <button 
                           type="submit" 
-                          className="h-14 w-14 bg-[#18181b] text-white rounded-xl flex items-center justify-center hover:bg-gray-900 active:scale-95 transition-all shadow-lg"
+                          className="h-10 w-10 bg-[#18181b] text-white rounded-xl flex items-center justify-center hover:bg-gray-900 active:scale-95 transition-all shadow-lg"
                       >
-                          <Plus size={24} />
+                          <Plus size={18} />
                       </button>
                       </div>
                   </div>
@@ -189,54 +187,54 @@ export const IncomeTab: React.FC = () => {
         )}
       </div>
 
-      {/* Unified Income List */}
-      <div className="space-y-8">
+      {/* Unified Income List - Compacted */}
+      <div className="space-y-6">
         <div>
-           <h3 className="flex items-center gap-2 text-[#18181b] font-bold text-xs uppercase tracking-widest mb-4">
-             <DollarSign size={14} /> All Income Sources
+           <h3 className="flex items-center gap-2 text-[#18181b] font-bold text-[10px] uppercase tracking-widest mb-3">
+             <DollarSign size={12} /> Income Sources
            </h3>
-           <div className="space-y-3">
+           <div className="space-y-2.5">
              {allIncomes.map(income => {
                 const isStable = income.type === 'Stable';
                 return (
-                  <div key={income.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center group hover:border-[#18181b] transition-all">
+                  <div key={income.id} className="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center group hover:border-[#18181b] transition-all">
                     <div>
-                      <div className="font-bold text-[#18181b] text-sm">{income.source}</div>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="font-bold text-[#18181b] text-xs">{income.source}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
                           {isStable ? (
-                              <div className="flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded text-[#18181b]">
+                              <div className="flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded text-[#18181b]">
                                   <Briefcase size={8} />
-                                  <span className="text-[9px] font-bold uppercase tracking-wider">Stable</span>
+                                  <span className="text-[8px] font-bold uppercase tracking-wider">Stable</span>
                               </div>
                           ) : (
-                              <div className="flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded text-[#18181b]">
+                              <div className="flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded text-[#18181b]">
                                   <TrendingUp size={8} />
-                                  <span className="text-[9px] font-bold uppercase tracking-wider">Variable</span>
+                                  <span className="text-[8px] font-bold uppercase tracking-wider">Variable</span>
                               </div>
                           )}
-                          {!isStable && <span className="text-[9px] text-gray-400 font-medium">{income.date}</span>}
+                          {!isStable && <span className="text-[8px] text-gray-400 font-medium">{income.date}</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-mono font-bold text-[#18181b] tracking-tight">${income.amountUSD.toLocaleString()}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-[#18181b] tracking-tight text-sm">${income.amountUSD.toLocaleString()}</span>
                       <button onClick={() => deleteIncome(income.id)} className="text-gray-300 hover:text-[#18181b] transition-colors">
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
                 );
              })}
-             {allIncomes.length === 0 && <div className="text-gray-300 text-xs italic pl-2">No income sources added yet.</div>}
+             {allIncomes.length === 0 && <div className="text-gray-300 text-[10px] italic pl-2">No income sources added yet.</div>}
            </div>
         </div>
 
-        {/* Assets Section */}
-        <div className="pt-8 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="flex items-center gap-2 text-[#18181b] font-bold text-xs uppercase tracking-widest">
-              <Landmark size={14} /> Assets & Portfolio
+        {/* Assets Section - Compacted */}
+        <div className="pt-6 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="flex items-center gap-2 text-[#18181b] font-bold text-[10px] uppercase tracking-widest">
+              <Landmark size={12} /> Assets
             </h3>
-            <span className="text-sm font-bold font-mono tracking-tight bg-gray-100 px-3 py-1 rounded-lg text-[#18181b]">
+            <span className="text-xs font-bold font-mono tracking-tight bg-gray-100 px-2 py-0.5 rounded text-[#18181b]">
               ${totalAssets.toLocaleString()}
             </span>
           </div>
@@ -244,37 +242,37 @@ export const IncomeTab: React.FC = () => {
           {!showAssetForm ? (
             <button 
               onClick={() => setShowAssetForm(true)}
-              className="w-full py-4 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 font-bold text-xs uppercase tracking-widest hover:border-[#18181b] hover:text-[#18181b] transition-all flex items-center justify-center gap-2 mb-6"
+              className="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 font-bold text-[10px] uppercase tracking-widest hover:border-[#18181b] hover:text-[#18181b] transition-all flex items-center justify-center gap-2 mb-4"
             >
-              <Plus size={16} /> Add Asset
+              <Plus size={14} /> Add Asset
             </button>
           ) : (
-             <form onSubmit={handleAddAsset} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 mb-6 animate-in fade-in slide-in-from-top-2">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#18181b]">New Asset</span>
-                  <button type="button" onClick={() => setShowAssetForm(false)} className="text-gray-400 hover:text-[#18181b]"><Trash2 size={14}/></button>
+             <form onSubmit={handleAddAsset} className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4 animate-in fade-in slide-in-from-top-2">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#18181b]">New Asset</span>
+                  <button type="button" onClick={() => setShowAssetForm(false)} className="text-gray-400 hover:text-[#18181b]"><Trash2 size={12}/></button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <input 
                     type="text" 
                     value={assetName}
                     onChange={e => setAssetName(e.target.value)}
-                    placeholder="Asset Name (e.g. Cash, Dave, Loan from Bank)"
-                    className="w-full h-12 px-4 bg-white rounded-xl border border-gray-200 text-sm font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
+                    placeholder="Asset Name"
+                    className="w-full h-10 px-3 bg-white rounded-xl border border-gray-200 text-xs font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
                     autoFocus
                   />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <input 
                       type="number" 
                       value={assetAmount}
                       onChange={e => setAssetAmount(e.target.value)}
                       placeholder="Value (USD)"
-                      className="h-12 px-4 bg-white rounded-xl border border-gray-200 text-sm font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
+                      className="h-10 px-3 bg-white rounded-xl border border-gray-200 text-xs font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all placeholder-gray-300"
                     />
                     <select 
                       value={assetType}
                       onChange={e => setAssetType(e.target.value as AssetType)}
-                      className="h-12 px-4 bg-white rounded-xl border border-gray-200 text-sm font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all"
+                      className="h-10 px-3 bg-white rounded-xl border border-gray-200 text-xs font-bold text-[#18181b] focus:border-[#18181b] focus:ring-1 focus:ring-[#18181b] outline-none transition-all"
                     >
                       <option value="Cash">Cash</option>
                       <option value="Item">Item</option>
@@ -284,7 +282,7 @@ export const IncomeTab: React.FC = () => {
                   </div>
                   <button 
                     type="submit" 
-                    className="w-full h-12 bg-[#18181b] text-white rounded-xl flex items-center justify-center font-bold text-sm hover:bg-gray-900 active:scale-95 transition-all shadow-md"
+                    className="w-full h-10 bg-[#18181b] text-white rounded-xl flex items-center justify-center font-bold text-xs hover:bg-gray-900 active:scale-95 transition-all shadow-md"
                   >
                     Save Asset
                   </button>
@@ -292,13 +290,12 @@ export const IncomeTab: React.FC = () => {
              </form>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {sortedAssets.map(asset => {
               const Icon = getAssetIcon(asset.type);
               const isNegative = asset.amountUSD < 0;
               const isLent = asset.type === 'Lent';
               
-              // Dynamic Styling based on asset type
               let iconBg = 'bg-gray-50 text-[#18181b]';
               let amountColor = 'text-[#18181b]';
               
@@ -311,31 +308,31 @@ export const IncomeTab: React.FC = () => {
               }
 
               return (
-                <div key={asset.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center group hover:border-[#18181b] transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-gray-200 group-hover:border-[#18181b] transition-colors ${iconBg}`}>
-                      <Icon size={18} strokeWidth={1.5} />
+                <div key={asset.id} className="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center group hover:border-[#18181b] transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center border border-gray-100 group-hover:border-[#18181b] transition-colors ${iconBg}`}>
+                      <Icon size={16} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <div className="font-bold text-[#18181b] text-sm">
+                      <div className="font-bold text-[#18181b] text-xs">
                         {asset.name}
-                        {isLent && <span className="ml-2 text-[8px] uppercase tracking-widest bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Owes You</span>}
+                        {isLent && <span className="ml-2 text-[7px] uppercase tracking-widest bg-blue-100 text-blue-700 px-1 py-0.5 rounded">Owes You</span>}
                       </div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{asset.type}</div>
+                      <div className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">{asset.type}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className={`font-mono font-bold tracking-tight ${amountColor}`}>
-                      {asset.amountUSD.toLocaleString()} USD
+                  <div className="flex items-center gap-3">
+                    <span className={`font-mono font-bold tracking-tight text-sm ${amountColor}`}>
+                      {asset.amountUSD.toLocaleString()}
                     </span>
                     <button onClick={() => deleteAsset(asset.id)} className="text-gray-300 hover:text-[#18181b] transition-colors">
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
               );
             })}
-             {assets.length === 0 && <div className="text-gray-300 text-xs italic pl-2">No assets recorded.</div>}
+             {assets.length === 0 && <div className="text-gray-300 text-[10px] italic pl-2">No assets recorded.</div>}
           </div>
         </div>
 

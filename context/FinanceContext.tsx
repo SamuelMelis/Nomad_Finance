@@ -96,7 +96,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             console.warn("Auth initialization timed out, forcing load completion.");
             setLoading(false);
         }
-    }, 3000);
+    }, 4000); // Increased slightly for auto-login attempt
 
     // Initialize Telegram Web App
     if (window.Telegram?.WebApp) {
@@ -168,7 +168,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       try {
-        // 2. Internal Database Connection (Try existing session first)
+        // 2. CHECK EXISTING SESSION
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         
         if (existingSession) {
@@ -176,30 +176,56 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             setSession(existingSession);
             setLoading(false);
           }
+        } else if (isTgPlatform && isAllowedUser) {
+          // 3. AUTO-LOGIN FOR ALLOWED TELEGRAM USER
+          // We generate a deterministic email/password for this Telegram user
+          // to ensure they access the SAME data across all devices.
+          
+          const autoEmail = `tg_${username?.toLowerCase()}@nomadfinance.app`;
+          const autoPassword = `nf_pass_${username}_${tgUser?.id}`; // Simple deterministic pass
+          
+          console.log("Attempting Auto-Login for", username);
+
+          // Try to Sign In
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: autoEmail,
+              password: autoPassword
+          });
+
+          if (signInError) {
+              console.log("Auto-login failed, attempting to register new shadow account...");
+              // If Sign In fails, Try to Sign Up (First time user on any device)
+              const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                  email: autoEmail,
+                  password: autoPassword
+              });
+              
+              if (signUpError) {
+                  console.error("Auto-signup failed:", signUpError);
+                  // Fallback to Local Storage if Cloud fails completely
+                  if (mounted) setLoading(false);
+              } else {
+                  if (mounted && signUpData.session) {
+                      setSession(signUpData.session);
+                      setLoading(false);
+                  } else {
+                      // Sometimes signup requires email verification (if enabled in supabase)
+                      // If so, we might be stuck. Assuming verification is OFF or auto-confirmed.
+                      console.log("Signup successful but no session (verification might be needed).");
+                      if (mounted) setLoading(false);
+                  }
+              }
+          } else {
+              if (mounted && signInData.session) {
+                  setSession(signInData.session);
+                  setLoading(false);
+              }
+          }
+
         } else {
-          // Attempt Anonymous Auth
-          const { data: { session: newSession }, error } = await supabase.auth.signInAnonymously();
-          
-          if (error) {
-            // IF anonymous auth fails (likely disabled), AND we are the authorized Telegram User,
-            // we do NOT treat this as a failure. We just fall back to LocalStorage mode.
-            if (isTgPlatform && isAllowedUser) {
-                 console.log("Supabase Auth disabled, using LocalStorage Mode for authorized user.");
-                 if (mounted) setLoading(false);
-            } else {
-                // If regular web user, we might want to fallback to demo or show auth
-                 if (mounted) setLoading(false);
-                 if (isDemo && mounted) loadDemoData();
-            }
-            
-            clearTimeout(safetyTimeout);
-            return;
-          }
-          
-          if (mounted) {
-            setSession(newSession);
-            setLoading(false);
-          }
+          // 4. BROWSER/DEMO fallback (No Telegram User)
+          if (mounted) setLoading(false);
+          if (isDemo && mounted) loadDemoData();
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
@@ -215,10 +241,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
-        // Only clear if we are NOT authorized (prevents clearing local storage data for auth'd users)
-        if(!session && !isDemoMode && !isAuthorized) {
-           // Clear state
-        }
       }
     });
 
@@ -484,8 +506,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const signOut = async () => {
       triggerHaptic('light');
       if (session) await supabase.auth.signOut();
-      // If local mode, "signing out" doesn't strictly make sense, but we could clear local data if we wanted. 
-      // For now, we just reload the page or do nothing, but UI will likely stay authorized if in Telegram.
       window.location.reload();
   };
 
@@ -512,7 +532,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       triggerHaptic,
       isTelegramEnv
     }}>
-      {/* Error Screen - Only shown for explicit Auth Errors (Gatekeeping), NOT DB connection errors */}
+      {/* Error Screen */}
       {authError ? (
           <div className="min-h-screen flex flex-col items-center justify-center bg-white p-8 text-center">
             <div className="bg-red-50 p-4 rounded-full mb-4">
