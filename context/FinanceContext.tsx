@@ -67,11 +67,13 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // Telegram Haptic Helper
   const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'error' | 'success' | 'warning') => {
-    if (window.Telegram?.WebApp?.HapticFeedback) {
+    const tg = window.Telegram?.WebApp;
+    // HapticFeedback is supported in version 6.1+
+    if (tg?.HapticFeedback && tg.version && parseFloat(tg.version) >= 6.1) {
       if (['error', 'success', 'warning'].includes(style)) {
-        window.Telegram.WebApp.HapticFeedback.notificationOccurred(style as 'error' | 'success' | 'warning');
+        tg.HapticFeedback.notificationOccurred(style as 'error' | 'success' | 'warning');
       } else {
-        window.Telegram.WebApp.HapticFeedback.impactOccurred(style as 'light' | 'medium' | 'heavy' | 'rigid' | 'soft');
+        tg.HapticFeedback.impactOccurred(style as 'light' | 'medium' | 'heavy' | 'rigid' | 'soft');
       }
     }
   };
@@ -117,9 +119,13 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
       
       // Match the App Theme and Header to Background (as fallback)
+      // Supported in v6.1+
       try {
-        tg.setHeaderColor('#ffffff');
-        tg.setBackgroundColor('#ffffff');
+        const versionStr = tg.version;
+        if (versionStr && parseFloat(versionStr) >= 6.1) {
+            tg.setHeaderColor('#ffffff');
+            tg.setBackgroundColor('#ffffff');
+        }
       } catch (e) {
         console.log('Error setting theme', e);
       }

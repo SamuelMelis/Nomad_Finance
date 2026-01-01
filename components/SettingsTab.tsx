@@ -33,9 +33,10 @@ export const SettingsTab: React.FC = () => {
   // Standard PWA Install (Browser) - Attempts to prompt native dialog
   const handleInstallClick = async () => {
     triggerHaptic('medium');
+    
     if (!deferredPrompt) {
-        // User requested no guide/menu interaction, so we just alert if unavailable.
-        alert("Install prompt unavailable. Please use the browser menu.");
+        // If prompt is unavailable, we don't alert anymore (it annoys users).
+        // The button UI already indicates manual action is needed.
         return;
     }
 
@@ -112,19 +113,22 @@ export const SettingsTab: React.FC = () => {
                 <h3 className="font-bold text-[#18181b] text-sm uppercase tracking-wider">App Installation</h3>
             </div>
 
-            {/* Main Install Button - Always shown if not installed. Manual guide removed as requested. */}
+            {/* Main Install Button - Changes based on prompt availability */}
             <button 
                 onClick={handleInstallClick}
-                className={`w-full p-5 rounded-2xl flex items-center justify-between shadow-lg active:scale-[0.98] transition-all ${
-                    deferredPrompt ? 'bg-[#18181b] text-white' : 'bg-white border border-gray-200 text-[#18181b]'
+                disabled={!deferredPrompt}
+                className={`w-full p-5 rounded-2xl flex items-center justify-between shadow-lg transition-all ${
+                    deferredPrompt 
+                    ? 'bg-[#18181b] text-white active:scale-[0.98]' 
+                    : 'bg-white border border-gray-200 text-[#18181b] cursor-default opacity-80'
                 }`}
             >
-                <div className="flex flex-col items-start">
+                <div className="flex flex-col items-start text-left">
                     <span className="font-bold text-sm">
-                        {deferredPrompt ? 'Install App' : 'Add to Home Screen'}
+                        {deferredPrompt ? 'Install App' : 'Install via Browser Menu'}
                     </span>
                     <span className={`text-[10px] font-medium ${deferredPrompt ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {deferredPrompt ? 'Tap to install' : 'Tap to add'}
+                        {deferredPrompt ? 'Tap to install' : 'Tap Menu > Add to Home Screen'}
                     </span>
                 </div>
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${deferredPrompt ? 'bg-white/10' : 'bg-gray-100'}`}>

@@ -108,8 +108,8 @@ export const ReportsTab: React.FC = () => {
         
         {categoryData.length > 0 ? (
           <>
-            <div className="h-64 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-64 w-full relative min-h-[250px]">
+              <ResponsiveContainer width="99%" height="100%">
                 <PieChart>
                   <Pie
                     data={categoryData}
@@ -170,8 +170,8 @@ export const ReportsTab: React.FC = () => {
            <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-md">ETB</span>
         </div>
         
-        <div className="h-48 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-48 w-full min-h-[192px]">
+          <ResponsiveContainer width="99%" height="100%">
             <BarChart data={trendData} barSize={viewPeriod === 'Week' ? 32 : 8}>
               <defs>
                 <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">

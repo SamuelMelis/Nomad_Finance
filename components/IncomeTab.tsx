@@ -70,7 +70,7 @@ export const IncomeTab: React.FC = () => {
       case 'Cash': return Wallet;
       case 'Item': return ShoppingBag;
       case 'Loan': return CreditCard;
-      case 'Lent': return Coins;
+      case 'Lent': return Coins; // Using Coins instead of HandCoins for compatibility
       default: return Wallet;
     }
   };
