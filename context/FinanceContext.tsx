@@ -39,7 +39,8 @@ declare global {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-const ALLOWED_USER = 'samuel_melis'; // Normalized to lowercase
+// STRICT ACCESS CONTROL
+const ALLOWED_USER = 'samuel_melis'; 
 
 // Helper for LocalStorage
 const LS_KEYS = {
@@ -94,10 +95,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     // Safety timeout to prevent infinite loading
     const safetyTimeout = setTimeout(() => {
         if (mounted && loading) {
-            console.warn("Auth initialization timed out, forcing load completion.");
+            console.warn("Auth initialization timed out.");
             setLoading(false);
         }
-    }, 6000); 
+    }, 8000); 
 
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
@@ -119,20 +120,23 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       const tgUser = tg?.initDataUnsafe?.user;
       const rawUsername = tgUser?.username || '';
-      const username = rawUsername.toLowerCase();
+      const username = rawUsername.toLowerCase().trim();
       
       const isAllowedUser = username === ALLOWED_USER;
 
       // STRICT GATEKEEPING FOR TELEGRAM
-      if (isTgPlatform && username && !isAllowedUser) {
-        if (mounted) {
-          setAuthError(`Access Restricted. Allowed: @${ALLOWED_USER}, Found: @${username}`);
-          setLoading(false);
-          setIsAuthorized(false);
-        }
-        return;
+      if (isTgPlatform) {
+          if (!username || !isAllowedUser) {
+            if (mounted) {
+                setAuthError(`Access Restricted. This app is for @${ALLOWED_USER} only.`);
+                setLoading(false);
+                setIsAuthorized(false);
+            }
+            return;
+          }
       }
 
+      // If we are here, we are either in Browser (Demo) or it is the Allowed User
       const isDemo = !isTgPlatform; 
 
       if (mounted) {
@@ -157,9 +161,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (isTgPlatform && isAllowedUser) {
           // Generate deterministic credentials
           const autoEmail = `tg_${username}@nomadfinance.app`;
-          // Use a consistent password strategy. 
-          // Note: In production, you'd use a backend to verify initData hash.
-          // Here we rely on the specific username check.
+          // Consistent password based on ID to ensure ability to login
           const autoPassword = `nomad_secure_${username}_${tgUser?.id || 'id'}`; 
           
           console.log("Attempting Auto-Login for", autoEmail);
@@ -179,33 +181,40 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
              return;
           }
 
-          console.log("Sign In failed (likely new user), attempting Sign Up...");
+          console.log("Sign In failed, attempting Sign Up for Sami...");
 
           // 2. Try Sign Up (if Sign In failed)
+          // Explicitly setting full_name to "Sami" as requested
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: autoEmail,
             password: autoPassword,
             options: {
                 data: {
                     username: rawUsername,
-                    full_name: `${tgUser?.first_name || ''} ${tgUser?.last_name || ''}`.trim()
+                    full_name: 'Sami' // Forced name registration
                 }
             }
           });
 
           if (signUpError) {
               console.error("Sign Up failed:", signUpError);
-              // If error is "User already registered" but sign-in failed previously, 
-              // it might be a password mismatch or network blip. 
-              // We fall back to local storage but keep Authorized = true.
+              setAuthError("Failed to register account on cloud.");
           } else if (signUpData.session) {
-              console.log("Sign Up Successful");
+              console.log("Sign Up Successful as Sami");
               if (mounted) setSession(signUpData.session);
-          } else if (signUpData.user && !signUpData.session) {
-              // User created but email confirmation required.
-              // Since we can't confirm fake emails, we are stuck unless Supabase project has "Confirm Email" disabled.
-              console.warn("User created but no session. Email confirmation might be required.");
-              setAuthError("Account created but requires email verification. Please disable 'Confirm Email' in Supabase Auth settings.");
+          } else {
+             // Case where user might be created but no session returned (confirm email setting)
+             // We attempt one last sign in just in case of race condition
+             const { data: retryData } = await supabase.auth.signInWithPassword({
+                email: autoEmail,
+                password: autoPassword
+             });
+             if (retryData.session && mounted) {
+                 setSession(retryData.session);
+             } else {
+                 console.warn("User created but no session. Email confirmation might be required.");
+                 setAuthError("Account requires email verification. Check Supabase settings.");
+             }
           }
         } 
         
@@ -226,7 +235,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
-        // If we get a session late, ensure loading stops
         if (session) setLoading(false);
       }
     });
@@ -240,15 +248,16 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // 2. Fetch Data (Cloud OR Local)
   useEffect(() => {
-    // If authorized (User is allowed), try to fetch
     if (!loading && isAuthorized) {
       if (session?.user) {
         fetchCloudData();
-      } else {
+      } else if (isDemoMode) {
+        // Only fetch local data if in Demo mode (Browser)
+        // If in Telegram but no session, we stay empty to avoid local storage confusion for the main user
         fetchLocalData();
       }
     }
-  }, [session, isAuthorized, loading]);
+  }, [session, isAuthorized, loading, isDemoMode]);
 
   const fetchLocalData = () => {
       try {
@@ -266,7 +275,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
              // Init settings if first time local
              const defaultSettings = {
                 ...INITIAL_SETTINGS,
-                userName: window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Freelancer'
+                userName: 'Freelancer'
             };
             setSettings(defaultSettings);
             localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(defaultSettings));
@@ -334,7 +343,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } else {
         const defaultSettings = {
             ...INITIAL_SETTINGS,
-            userName: window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Freelancer'
+            userName: 'Sami' // Default name for the cloud profile
         };
         await updateSettings(defaultSettings);
     }
@@ -370,8 +379,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         } else {
             fetchCloudData(); 
         }
-    } else {
-        // Local Save
+    } else if (isDemoMode) {
         localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
     }
   };
@@ -383,7 +391,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     if (session?.user) {
         await supabase.from('expenses').delete().eq('id', id);
-    } else {
+    } else if (isDemoMode) {
         localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updated));
     }
   };
@@ -405,7 +413,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
         if (error) setIncomes(prev => prev.filter(i => i.id !== tempId));
         else fetchCloudData();
-    } else {
+    } else if (isDemoMode) {
         localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
     }
   };
@@ -416,7 +424,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     setIncomes(updated);
     
     if (session?.user) await supabase.from('incomes').delete().eq('id', id);
-    else localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
+    else if (isDemoMode) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
   };
 
   const addAsset = async (asset: Omit<Asset, 'id'>) => {
@@ -435,7 +443,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
         if (error) setAssets(prev => prev.filter(a => a.id !== tempId));
         else fetchCloudData();
-    } else {
+    } else if (isDemoMode) {
         localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
     }
   };
@@ -446,7 +454,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     setAssets(updated);
     
     if (session?.user) await supabase.from('assets').delete().eq('id', id);
-    else localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
+    else if (isDemoMode) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
   };
 
   const updateSettings = async (newSettings: Partial<Settings>) => {
@@ -462,7 +470,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         dbSettings.user_id = session.user.id;
         await supabase.from('user_settings').upsert(dbSettings);
-    } else {
+    } else if (isDemoMode) {
         localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(updated));
     }
   };
@@ -481,7 +489,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
            await supabase.from('assets').delete().eq('user_id', session.user.id);
            await supabase.from('user_settings').delete().eq('user_id', session.user.id);
            await updateSettings(INITIAL_SETTINGS);
-       } else {
+       } else if (isDemoMode) {
            localStorage.removeItem(LS_KEYS.EXPENSES);
            localStorage.removeItem(LS_KEYS.INCOMES);
            localStorage.removeItem(LS_KEYS.ASSETS);
