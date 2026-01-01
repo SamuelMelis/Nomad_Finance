@@ -27,6 +27,7 @@ declare global {
           user?: {
             username?: string;
             first_name?: string;
+            last_name?: string;
             id?: number;
           };
         };
@@ -38,7 +39,7 @@ declare global {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-const ALLOWED_USER = 'Samuel_Melis';
+const ALLOWED_USER = 'samuel_melis'; // Normalized to lowercase
 
 // Helper for LocalStorage
 const LS_KEYS = {
@@ -89,62 +90,36 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   // 1. Handle Auth Session & Telegram Gatekeeping
   useEffect(() => {
     let mounted = true;
-
+    
     // Safety timeout to prevent infinite loading
     const safetyTimeout = setTimeout(() => {
         if (mounted && loading) {
             console.warn("Auth initialization timed out, forcing load completion.");
             setLoading(false);
         }
-    }, 4000); // Increased slightly for auto-login attempt
+    }, 6000); 
 
-    // Initialize Telegram Web App
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
-      
+      try { tg.expand(); } catch (e) {}
       try {
-        tg.expand();
-      } catch (e) {
-        console.warn('Telegram expand failed:', e);
-      }
-
-      // Strict check for Fullscreen support (Requires v8.0+)
-      try {
-        const versionStr = tg.version;
-        if (versionStr) {
-            const version = parseFloat(versionStr);
-            if (!isNaN(version) && version >= 8.0) {
-                 if (typeof tg.requestFullscreen === 'function') {
-                    tg.requestFullscreen();
-                 }
-            }
-        }
-      } catch (e) {
-          console.log("Fullscreen not supported:", e);
-      }
-      
-      // Match the App Theme
-      try {
-        const versionStr = tg.version;
-        if (versionStr && parseFloat(versionStr) >= 6.1) {
+        if (tg.version && parseFloat(tg.version) >= 6.1) {
             tg.setHeaderColor('#ffffff');
             tg.setBackgroundColor('#ffffff');
         }
-      } catch (e) {
-        console.log('Error setting theme', e);
-      }
+      } catch (e) {}
     }
 
     const initializeAuth = async () => {
-      // 1. Check Telegram Environment
       const tg = window.Telegram?.WebApp;
       const isTgPlatform = tg && (tg.platform !== 'unknown' || tg.initData.length > 0);
       
       if (mounted) setIsTelegramEnv(!!isTgPlatform);
 
       const tgUser = tg?.initDataUnsafe?.user;
-      const username = tgUser?.username;
+      const rawUsername = tgUser?.username || '';
+      const username = rawUsername.toLowerCase();
       
       const isAllowedUser = username === ALLOWED_USER;
 
@@ -155,11 +130,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           setLoading(false);
           setIsAuthorized(false);
         }
-        clearTimeout(safetyTimeout);
         return;
       }
 
-      // DETERMINE DEMO MODE
       const isDemo = !isTgPlatform; 
 
       if (mounted) {
@@ -168,70 +141,82 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       try {
-        // 2. CHECK EXISTING SESSION
+        // A. Check existing session first
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         
         if (existingSession) {
+          console.log("Found existing session");
           if (mounted) {
             setSession(existingSession);
             setLoading(false);
           }
-        } else if (isTgPlatform && isAllowedUser) {
-          // 3. AUTO-LOGIN FOR ALLOWED TELEGRAM USER
-          // We generate a deterministic email/password for this Telegram user
-          // to ensure they access the SAME data across all devices.
+          return;
+        } 
+        
+        // B. If in Telegram and is Allowed User -> Auto Login/Register
+        if (isTgPlatform && isAllowedUser) {
+          // Generate deterministic credentials
+          const autoEmail = `tg_${username}@nomadfinance.app`;
+          // Use a consistent password strategy. 
+          // Note: In production, you'd use a backend to verify initData hash.
+          // Here we rely on the specific username check.
+          const autoPassword = `nomad_secure_${username}_${tgUser?.id || 'id'}`; 
           
-          const autoEmail = `tg_${username?.toLowerCase()}@nomadfinance.app`;
-          const autoPassword = `nf_pass_${username}_${tgUser?.id}`; // Simple deterministic pass
-          
-          console.log("Attempting Auto-Login for", username);
+          console.log("Attempting Auto-Login for", autoEmail);
 
-          // Try to Sign In
+          // 1. Try Sign In
           const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: autoEmail,
               password: autoPassword
           });
 
-          if (signInError) {
-              console.log("Auto-login failed, attempting to register new shadow account...");
-              // If Sign In fails, Try to Sign Up (First time user on any device)
-              const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                  email: autoEmail,
-                  password: autoPassword
-              });
-              
-              if (signUpError) {
-                  console.error("Auto-signup failed:", signUpError);
-                  // Fallback to Local Storage if Cloud fails completely
-                  if (mounted) setLoading(false);
-              } else {
-                  if (mounted && signUpData.session) {
-                      setSession(signUpData.session);
-                      setLoading(false);
-                  } else {
-                      // Sometimes signup requires email verification (if enabled in supabase)
-                      // If so, we might be stuck. Assuming verification is OFF or auto-confirmed.
-                      console.log("Signup successful but no session (verification might be needed).");
-                      if (mounted) setLoading(false);
-                  }
-              }
-          } else {
-              if (mounted && signInData.session) {
-                  setSession(signInData.session);
-                  setLoading(false);
-              }
+          if (!signInError && signInData.session) {
+             console.log("Sign In Successful");
+             if (mounted) {
+               setSession(signInData.session);
+               setLoading(false);
+             }
+             return;
           }
 
-        } else {
-          // 4. BROWSER/DEMO fallback (No Telegram User)
-          if (mounted) setLoading(false);
-          if (isDemo && mounted) loadDemoData();
-        }
+          console.log("Sign In failed (likely new user), attempting Sign Up...");
+
+          // 2. Try Sign Up (if Sign In failed)
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: autoEmail,
+            password: autoPassword,
+            options: {
+                data: {
+                    username: rawUsername,
+                    full_name: `${tgUser?.first_name || ''} ${tgUser?.last_name || ''}`.trim()
+                }
+            }
+          });
+
+          if (signUpError) {
+              console.error("Sign Up failed:", signUpError);
+              // If error is "User already registered" but sign-in failed previously, 
+              // it might be a password mismatch or network blip. 
+              // We fall back to local storage but keep Authorized = true.
+          } else if (signUpData.session) {
+              console.log("Sign Up Successful");
+              if (mounted) setSession(signUpData.session);
+          } else if (signUpData.user && !signUpData.session) {
+              // User created but email confirmation required.
+              // Since we can't confirm fake emails, we are stuck unless Supabase project has "Confirm Email" disabled.
+              console.warn("User created but no session. Email confirmation might be required.");
+              setAuthError("Account created but requires email verification. Please disable 'Confirm Email' in Supabase Auth settings.");
+          }
+        } 
+        
+        // C. Fallback completes
+        if (mounted) setLoading(false);
+        if (isDemo && mounted) loadDemoData();
+
       } catch (error) {
-        console.error("Auth initialization error:", error);
+        console.error("Auth initialization fatal error:", error);
         if (mounted) setLoading(false);
       }
-      clearTimeout(safetyTimeout);
     };
 
     initializeAuth();
@@ -241,6 +226,8 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
+        // If we get a session late, ensure loading stops
+        if (session) setLoading(false);
       }
     });
 
@@ -254,14 +241,14 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   // 2. Fetch Data (Cloud OR Local)
   useEffect(() => {
     // If authorized (User is allowed), try to fetch
-    if (isAuthorized) {
+    if (!loading && isAuthorized) {
       if (session?.user) {
         fetchCloudData();
       } else {
         fetchLocalData();
       }
     }
-  }, [session, isAuthorized]);
+  }, [session, isAuthorized, loading]);
 
   const fetchLocalData = () => {
       try {
@@ -542,7 +529,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             <p className="text-sm text-gray-500 max-w-xs mb-4">
                 This application is private.
             </p>
-            <p className="text-xs text-gray-400 font-mono bg-gray-100 p-2 rounded">
+            <p className="text-xs text-gray-400 font-mono bg-gray-100 p-2 rounded break-all">
                 {authError}
             </p>
         </div>

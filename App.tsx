@@ -55,7 +55,7 @@ const AppContent: React.FC = () => {
         {/* Main Content Area - Increased top padding for Telegram Header safety */}
         <main 
           className="px-5 min-h-screen"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 4rem)' }}
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6rem)' }}
         >
           {renderTab()}
         </main>
