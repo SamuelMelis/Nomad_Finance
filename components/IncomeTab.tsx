@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFinance } from '../context/FinanceContext';
-import { DollarSign, Briefcase, Plus, Trash2, Landmark, TrendingUp, Wallet, X, CreditCard, ShoppingBag, HandCoins } from 'lucide-react';
+import { DollarSign, Briefcase, Plus, Trash2, Landmark, TrendingUp, Wallet, X, CreditCard, ShoppingBag, Coins } from 'lucide-react';
 import { AssetType } from '../types';
 
 export const IncomeTab: React.FC = () => {
@@ -70,7 +70,7 @@ export const IncomeTab: React.FC = () => {
       case 'Cash': return Wallet;
       case 'Item': return ShoppingBag;
       case 'Loan': return CreditCard;
-      case 'Lent': return HandCoins;
+      case 'Lent': return Coins;
       default: return Wallet;
     }
   };
