@@ -12,6 +12,7 @@ declare global {
         ready: () => void;
         expand: () => void;
         requestFullscreen: () => void; // New method to enter fullscreen
+        version: string;
         platform: string;
         setHeaderColor: (color: string) => void;
         setBackgroundColor: (color: string) => void;
@@ -91,15 +92,28 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
-      tg.expand();
-
-      // Request Fullscreen to hide the title bar (Try/Catch for safety)
+      
       try {
-        if (tg.requestFullscreen) {
-            tg.requestFullscreen();
+        tg.expand();
+      } catch (e) {
+        console.warn('Telegram expand failed:', e);
+      }
+
+      // Strict check for Fullscreen support (Requires v8.0+)
+      // We check parsing to ensure we don't call it on v6.0
+      try {
+        const versionStr = tg.version;
+        if (versionStr) {
+            const version = parseFloat(versionStr);
+            if (!isNaN(version) && version >= 8.0) {
+                 if (typeof tg.requestFullscreen === 'function') {
+                    tg.requestFullscreen();
+                 }
+            }
         }
       } catch (e) {
-          console.log("Fullscreen not supported or failed:", e);
+          // Silent catch to prevent alerting users on older devices
+          console.log("Fullscreen not supported:", e);
       }
       
       // Match the App Theme and Header to Background (as fallback)
@@ -143,7 +157,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       try {
-        // 2. Internal Database Connection (using Anonymous Auth for RLS)
+        // 2. Internal Database Connection (Try existing session first)
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         
         if (existingSession) {
@@ -152,21 +166,34 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             setLoading(false);
           }
         } else {
-          // Auto-connect to DB
+          // Attempt Anonymous Auth
+          // Note: If disabled in Supabase, this will error. We handle that gracefully.
           const { data: { session: newSession }, error } = await supabase.auth.signInAnonymously();
           
           if (error) {
-            console.error("DB Connection failed", error);
-            if (isDemo && mounted) {
-                // FALLBACK TO LOCAL DEMO MODE if DB fails in browser
-                console.warn("Falling back to local demo mode due to DB error");
-                loadDemoData();
-                clearTimeout(safetyTimeout);
-                return;
-            } else if (mounted) {
-                setAuthError("Database connection failed. Check Supabase 'Anonymous Sign-ins' setting.");
+            // Check if specific error regarding anonymous auth being disabled
+            const isAnonDisabled = error.message.includes('Anonymous sign-ins are disabled');
+            
+            if (isAnonDisabled) {
+                // Not a critical error, just means user must sign in manually
+                console.log("Anonymous auth disabled, falling back to manual login.");
+            } else {
+                console.warn("DB Connection warning:", error.message);
+            }
+
+            // If anonymous auth fails, we stop loading.
+            // App.tsx will detect !session and show the <Auth /> screen.
+            if (mounted) {
                 setLoading(false);
             }
+
+            // Only fallback to demo data if we are NOT in the app (e.g. debugging in browser)
+            // If in app, we want to force the login screen.
+            if (isDemo && mounted && !isAnonDisabled) {
+                console.warn("Falling back to local demo mode due to DB error");
+                loadDemoData();
+            }
+            
             clearTimeout(safetyTimeout);
             return;
           }
@@ -182,7 +209,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             // Fallback for demo
             loadDemoData();
         } else if (mounted) {
-           setAuthError("Initialization error.");
+           // Allow manual auth on error
            setLoading(false);
         }
       }
@@ -450,7 +477,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       triggerHaptic,
       isTelegramEnv
     }}>
-      {/* Error Screen */}
+      {/* Error Screen - Only shown for explicit Auth Errors (Gatekeeping), NOT DB connection errors */}
       {authError ? (
           <div className="min-h-screen flex flex-col items-center justify-center bg-white p-8 text-center">
             <div className="bg-red-50 p-4 rounded-full mb-4">

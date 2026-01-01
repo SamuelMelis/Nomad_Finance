@@ -5,6 +5,7 @@ import { ExpensesTab } from './components/ExpensesTab';
 import { IncomeTab } from './components/IncomeTab';
 import { ReportsTab } from './components/ReportsTab';
 import { SettingsTab } from './components/SettingsTab';
+import { Auth } from './components/Auth';
 import { LayoutDashboard, Wallet, PiggyBank, BarChart3, Settings, Loader2 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'expenses' | 'income' | 'reports' | 'settings';
@@ -27,15 +28,9 @@ const AppContent: React.FC = () => {
   }
 
   // Allow render if we have a session OR we are in demo mode
+  // If no session and not demo mode (e.g. Telegram env with anonymous auth disabled), show Auth screen
   if (!session && !isDemoMode) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-white p-6 text-center">
-            <div>
-                <h2 className="text-xl font-bold text-[#18181b] mb-2">Authentication Required</h2>
-                <p className="text-gray-500 text-sm">Unable to verify session or load demo mode.</p>
-            </div>
-        </div>
-      );
+      return <Auth />;
   }
 
   const renderTab = () => {
