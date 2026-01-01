@@ -52,10 +52,10 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-white text-[#18181b] font-sans selection:bg-[#18181b] selection:text-white">
       <div className="max-w-md mx-auto min-h-screen relative bg-white border-x border-gray-50 shadow-2xl">
         
-        {/* Main Content Area - Adjusted top padding (3rem * 1.2 = 3.6rem) */}
+        {/* Main Content Area - Adjusted top padding (Reduced from 3.6rem to 2.5rem - approx 30% less) */}
         <main 
           className="px-5 min-h-screen"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3.6rem)' }}
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 2.5rem)' }}
         >
           {renderTab()}
         </main>

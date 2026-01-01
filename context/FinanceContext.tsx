@@ -52,7 +52,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [settings, setSettings] = useState<Settings>(INITIAL_SETTINGS);
   
   const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false); // Used for LocalStorage mode for the allowed user
+  const [isDemoMode, setIsDemoMode] = useState(false); 
   const [isTelegramEnv, setIsTelegramEnv] = useState(false);
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   
@@ -77,9 +77,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     const safetyTimeout = setTimeout(() => {
         if (mounted && loading) {
+            console.warn("Auth check timed out, releasing lock.");
             setLoading(false);
         }
-    }, 3000); 
+    }, 4000); 
 
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
@@ -101,42 +102,79 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       const tgUser = tg?.initDataUnsafe?.user;
       
+      // Check for existing Supabase Session first
+      const { data: { session: existingSession } } = await supabase.auth.getSession();
+
       if (mounted && tgUser) {
           setTelegramUser(tgUser);
           
           // STRICT ACCESS CONTROL
           // Only allow 'samuel_melis' (case insensitive)
-          if (tgUser.username && tgUser.username.toLowerCase() === ALLOWED_USERNAME) {
-              // Access Granted: Enable "Demo Mode" which acts as LocalStorage Mode
-              setIsDemoMode(true);
-              setLoading(false);
+          const isAllowed = tgUser.username && tgUser.username.toLowerCase() === ALLOWED_USERNAME;
+          
+          if (isAllowed) {
+              // Access Granted:
+              // We disable Demo Mode to enforce Cloud Sync (Supabase).
+              setIsDemoMode(false);
+              
+              if (existingSession) {
+                  setSession(existingSession);
+                  setLoading(false);
+              } else {
+                  // No session yet -> Stop loading so <Auth /> renders and asks for password
+                  setLoading(false);
+              }
           } else {
-              // Access Denied: Stop loading, keep isDemoMode false. 
-              // This triggers App.tsx to show Auth component (which shows Access Denied msg).
+              // Access Denied
+              // Stop loading so <Auth /> renders and shows "Access Denied" message
               setLoading(false);
           }
       } else {
-          // Not in Telegram or No User Data -> Access Denied
-          setLoading(false);
+          // Fallback for browser testing or non-telegram environment
+          // If in browser (dev), allow checking existing session or show Auth
+          if (existingSession) {
+             if (mounted) {
+                 setSession(existingSession);
+                 setLoading(false);
+             }
+          } else {
+             if (mounted) setLoading(false);
+          }
       }
     };
 
     initializeAuth();
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setSession(session);
+        // If we get a session update, we are definitely done loading
+        if (session) setLoading(false);
+      }
+    });
+
     return () => {
       mounted = false;
       clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
     };
   }, []);
 
-  // 2. Fetch Data (Local Storage Only for Samuel)
+  // 2. Fetch Data (Cloud OR Local)
   useEffect(() => {
-    if (!loading && isDemoMode) {
+    if (!loading) {
+      if (session?.user) {
+        fetchCloudData();
+      } else if (isDemoMode) {
         fetchLocalData();
+      }
     }
-  }, [loading, isDemoMode]);
+  }, [session, loading, isDemoMode]);
 
   const fetchLocalData = () => {
+      // Local Storage Logic (fallback only)
       try {
           const lExp = localStorage.getItem(LS_KEYS.EXPENSES);
           const lInc = localStorage.getItem(LS_KEYS.INCOMES);
@@ -149,34 +187,99 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           if (lSet) {
               setSettings(JSON.parse(lSet));
           } else {
-             const defaultSettings = {
-                ...INITIAL_SETTINGS,
-                userName: 'Samuel'
-            };
-            setSettings(defaultSettings);
-            localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(defaultSettings));
+             setSettings({ ...INITIAL_SETTINGS, userName: 'Samuel' });
           }
       } catch (e) {
           console.error("Error reading local storage", e);
       }
   };
 
-  // --- Actions (LocalStorage Only) ---
+  const fetchCloudData = async () => {
+    if (!session?.user) return;
+    
+    const { data: expensesData } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+    if (expensesData) {
+      const mappedExpenses = expensesData.map((e: any) => ({
+        ...e,
+        amountETB: e.amount_etb,
+        isRecurring: e.is_recurring
+      }));
+      setExpenses(mappedExpenses);
+    }
+
+    const { data: incomesData } = await supabase.from('incomes').select('*').order('date', { ascending: false });
+    if (incomesData) {
+      const mappedIncomes = incomesData.map((i: any) => ({
+        ...i,
+        amountUSD: i.amount_usd
+      }));
+      setIncomes(mappedIncomes);
+    }
+
+    const { data: assetsData } = await supabase.from('assets').select('*');
+    if (assetsData) {
+      const mappedAssets = assetsData.map((a: any) => ({
+        ...a,
+        amountUSD: a.amount_usd
+      }));
+      setAssets(mappedAssets);
+    }
+
+    const { data: settingsData } = await supabase.from('user_settings').select('*').single();
+    if (settingsData) {
+      setSettings({
+        exchangeRate: settingsData.exchange_rate,
+        savingsGoalUSD: settingsData.savings_goal_usd,
+        recurringEnabled: settingsData.recurring_enabled,
+        userName: settingsData.user_name
+      });
+    } else {
+        const displayName = telegramUser?.first_name || 'Freelancer';
+        const defaultSettings = { ...INITIAL_SETTINGS, userName: displayName };
+        await updateSettings(defaultSettings);
+    }
+  };
+
+  // --- Actions ---
 
   const addExpense = async (expense: Omit<Expense, 'id'>) => {
     const tempId = crypto.randomUUID();
     const newExpense = { ...expense, id: tempId };
     const updatedExpenses = [newExpense, ...expenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Optimistic Update
     setExpenses(updatedExpenses);
     triggerHaptic('success');
-    localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
+
+    if (session?.user) {
+        const { error } = await supabase.from('expenses').insert({
+            user_id: session.user.id,
+            amount_etb: expense.amountETB,
+            category: expense.category,
+            date: expense.date,
+            is_recurring: expense.isRecurring,
+            frequency: expense.frequency,
+            note: expense.note
+        });
+        if (error) {
+            triggerHaptic('error');
+            // Revert
+            setExpenses(prev => prev.filter(e => e.id !== tempId));
+        } else {
+            // Optional: Re-fetch to confirm ID
+            // fetchCloudData(); 
+        }
+    } else if (isDemoMode) {
+        localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
+    }
   };
 
   const deleteExpense = async (id: string) => {
     triggerHaptic('medium');
     const updated = expenses.filter(e => e.id !== id);
     setExpenses(updated);
-    localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updated));
+    if (session?.user) await supabase.from('expenses').delete().eq('id', id);
+    else if (isDemoMode) localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updated));
   };
 
   const addIncome = async (income: Omit<Income, 'id'>) => {
@@ -185,14 +288,24 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = [newIncome, ...incomes];
     setIncomes(updated);
     triggerHaptic('success');
-    localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
+    if (session?.user) {
+        const { error } = await supabase.from('incomes').insert({
+            user_id: session.user.id,
+            amount_usd: income.amountUSD,
+            source: income.source,
+            date: income.date,
+            type: income.type
+        });
+        if (error) setIncomes(prev => prev.filter(i => i.id !== tempId));
+    } else if (isDemoMode) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
   };
 
   const deleteIncome = async (id: string) => {
     triggerHaptic('medium');
     const updated = incomes.filter(i => i.id !== id);
     setIncomes(updated);
-    localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
+    if (session?.user) await supabase.from('incomes').delete().eq('id', id);
+    else if (isDemoMode) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
   };
 
   const addAsset = async (asset: Omit<Asset, 'id'>) => {
@@ -201,36 +314,61 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = [newAsset, ...assets];
     setAssets(updated);
     triggerHaptic('success');
-    localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
+    if (session?.user) {
+        const { error } = await supabase.from('assets').insert({
+            user_id: session.user.id,
+            name: asset.name,
+            amount_usd: asset.amountUSD,
+            type: asset.type
+        });
+        if (error) setAssets(prev => prev.filter(a => a.id !== tempId));
+    } else if (isDemoMode) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
   };
 
   const deleteAsset = async (id: string) => {
     triggerHaptic('medium');
     const updated = assets.filter(a => a.id !== id);
     setAssets(updated);
-    localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
+    if (session?.user) await supabase.from('assets').delete().eq('id', id);
+    else if (isDemoMode) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
   };
 
   const updateSettings = async (newSettings: Partial<Settings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
-    localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(updated));
+    if (session?.user) {
+        const dbSettings: any = {};
+        if (newSettings.exchangeRate !== undefined) dbSettings.exchange_rate = newSettings.exchangeRate;
+        if (newSettings.savingsGoalUSD !== undefined) dbSettings.savings_goal_usd = newSettings.savingsGoalUSD;
+        if (newSettings.recurringEnabled !== undefined) dbSettings.recurring_enabled = newSettings.recurringEnabled;
+        if (newSettings.userName !== undefined) dbSettings.user_name = newSettings.userName;
+        dbSettings.user_id = session.user.id;
+        await supabase.from('user_settings').upsert(dbSettings);
+    } else if (isDemoMode) localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(updated));
   };
 
   const resetData = async () => {
     if (window.confirm('Are you sure you want to delete all data?')) {
        triggerHaptic('warning');
        setExpenses([]); setIncomes([]); setAssets([]); setSettings(INITIAL_SETTINGS);
-       localStorage.removeItem(LS_KEYS.EXPENSES);
-       localStorage.removeItem(LS_KEYS.INCOMES);
-       localStorage.removeItem(LS_KEYS.ASSETS);
-       localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+       if (session?.user) {
+           await supabase.from('expenses').delete().eq('user_id', session.user.id);
+           await supabase.from('incomes').delete().eq('user_id', session.user.id);
+           await supabase.from('assets').delete().eq('user_id', session.user.id);
+           await supabase.from('user_settings').delete().eq('user_id', session.user.id);
+           await updateSettings(INITIAL_SETTINGS);
+       } else if (isDemoMode) {
+           localStorage.removeItem(LS_KEYS.EXPENSES);
+           localStorage.removeItem(LS_KEYS.INCOMES);
+           localStorage.removeItem(LS_KEYS.ASSETS);
+           localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+       }
     }
   };
 
   const signOut = async () => {
-      // For this single-user local version, sign out just reloads/resets view
       triggerHaptic('light');
+      if (session) await supabase.auth.signOut();
       window.location.reload();
   };
 
