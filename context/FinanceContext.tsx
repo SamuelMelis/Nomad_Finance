@@ -16,8 +16,8 @@ declare global {
         platform: string;
         setHeaderColor: (color: string) => void;
         setBackgroundColor: (color: string) => void;
-        addToHomeScreen: () => void; 
-        checkHomeScreenStatus: (callback: (status: string) => void) => void; 
+        addToHomeScreen: () => void;
+        checkHomeScreenStatus: (callback: (status: string) => void) => void;
         HapticFeedback: {
           impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
           notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
@@ -45,7 +45,7 @@ const LS_KEYS = {
 const ALLOWED_USERNAME = 'samuel_melis';
 // Versioned email to ensure a clean start if previous credentials conflicted
 const AUTO_EMAIL = 'tg_samuel_melis_v5@nomadfinance.app';
-const AUTO_PASS = 'Nomad_Internal_Secret_2024!'; 
+const AUTO_PASS = 'Nomad_Internal_Secret_2024!';
 
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -53,12 +53,12 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [settings, setSettings] = useState<Settings>(INITIAL_SETTINGS);
-  
+
   const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false); 
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [isTelegramEnv, setIsTelegramEnv] = useState(false);
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
-  
+
   // UI Control
   const [isTabBarHidden, setTabBarHidden] = useState(false);
 
@@ -77,125 +77,124 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   // 1. Handle Auth & Access Control
   useEffect(() => {
     let mounted = true;
-    
+
     // Safety timeout: If auth takes too long, fall back to local mode to let the user in.
     const safetyTimeout = setTimeout(() => {
-        if (mounted && loading) {
-            console.warn("Auth check timed out. Forcing entry via Local Mode.");
-            if (telegramUser?.username?.toLowerCase() === ALLOWED_USERNAME) {
-                setIsDemoMode(true); // Fallback to local
-                setLoading(false);
-            }
+      if (mounted && loading) {
+        console.warn("Auth check timed out. Forcing entry via Local Mode.");
+        if (telegramUser?.username?.toLowerCase() === ALLOWED_USERNAME) {
+          setIsDemoMode(true); // Fallback to local
+          setLoading(false);
         }
+      }
     }, 8000);
 
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
-      try { tg.expand(); } catch (e) {}
+      try { tg.expand(); } catch (e) { }
       try {
         if (tg.version && parseFloat(tg.version) >= 6.1) {
-            tg.setHeaderColor('#ffffff');
-            tg.setBackgroundColor('#ffffff');
+          tg.setHeaderColor('#ffffff');
+          tg.setBackgroundColor('#ffffff');
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const initializeAuth = async () => {
       const tg = window.Telegram?.WebApp;
       const isTgPlatform = tg && (tg.platform !== 'unknown' || tg.initData.length > 0);
-      
+
       if (mounted) setIsTelegramEnv(!!isTgPlatform);
 
       const tgUser = tg?.initDataUnsafe?.user;
-      
+
       // Check for existing Supabase Session first
       const { data: { session: existingSession } } = await supabase.auth.getSession();
 
       if (mounted && tgUser) {
-          setTelegramUser(tgUser);
-          
-          // STRICT ACCESS CONTROL
-          const isAllowed = tgUser.username && tgUser.username.toLowerCase() === ALLOWED_USERNAME;
-          
-          if (isAllowed) {
-              
-              if (existingSession) {
-                  // Session exists and is valid
-                  setSession(existingSession);
-                  setIsDemoMode(false);
-                  setLoading(false);
-              } else {
-                  // --- AUTOMATIC LOGIN SEQUENCE ---
-                  // No password prompt. Backend logic.
-                  console.log("Attempting auto-login for allowed user...");
-                  
-                  try {
-                      // 1. Try Login
-                      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                          email: AUTO_EMAIL,
-                          password: AUTO_PASS
-                      });
+        setTelegramUser(tgUser);
 
-                      if (signInData.session) {
-                          setSession(signInData.session);
-                          setIsDemoMode(false);
-                          setLoading(false);
-                          return;
-                      }
+        // STRICT ACCESS CONTROL
+        const isAllowed = tgUser.username && tgUser.username.toLowerCase() === ALLOWED_USERNAME;
 
-                      // 2. If Login failed, Try Register (First time use)
-                      if (signInError) {
-                          console.log("Auto-login failed, attempting auto-registration...", signInError.message);
-                          
-                          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                              email: AUTO_EMAIL,
-                              password: AUTO_PASS,
-                              options: {
-                                  data: {
-                                      username: tgUser.username,
-                                      full_name: tgUser.first_name
-                                  }
-                              }
-                          });
+        if (isAllowed) {
 
-                          if (signUpData.session) {
-                              setSession(signUpData.session);
-                              setIsDemoMode(false);
-                          } else {
-                              console.error("Auto-registration failed:", signUpError);
-                              // Critical Failure: Fallback to Local Mode so user can still use app
-                              setIsDemoMode(true);
-                          }
-                      }
-                  } catch (err) {
-                      console.error("Unexpected auth error:", err);
-                      // Critical Failure: Fallback to Local Mode
-                      setIsDemoMode(true);
-                  }
-                  
-                  setLoading(false);
-              }
-          } else {
-              // Access Denied for non-Samuel
-              setLoading(false);
-          }
-      } else {
-          // Fallback for browser dev (Simulate Samuel if needed for testing, or rely on existing session)
           if (existingSession) {
-             if (mounted) {
-                 setSession(existingSession);
-                 setLoading(false);
-             }
+            // Session exists and is valid
+            setSession(existingSession);
+            setIsDemoMode(false);
+            setLoading(false);
           } else {
-             // In Browser dev without Telegram context, we might end up here.
-             // If you want to test in browser as Samuel, uncomment below:
-             /*
-             setTelegramUser({ id: 123, first_name: 'Samuel', username: 'samuel_melis' });
-             // Recursive call or reload would be needed, effectively just manual for now.
-             */
-             if (mounted) setLoading(false);
+            // --- AUTOMATIC LOGIN SEQUENCE ---
+            console.log("Attempting auto-login for allowed user...");
+
+            try {
+              // 1. Try Login
+              const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                email: AUTO_EMAIL,
+                password: AUTO_PASS
+              });
+
+              if (signInData.session) {
+                setSession(signInData.session);
+                setIsDemoMode(false);
+                setLoading(false);
+                return;
+              }
+
+              // 2. If Login failed, Try Register (First time use)
+              if (signInError) {
+                console.log("Auto-login failed, attempting auto-registration...", signInError.message);
+
+                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                  email: AUTO_EMAIL,
+                  password: AUTO_PASS,
+                  options: {
+                    data: {
+                      username: tgUser.username,
+                      full_name: tgUser.first_name
+                    }
+                  }
+                });
+
+                if (signUpData.session) {
+                  setSession(signUpData.session);
+                  setIsDemoMode(false);
+                } else {
+                  console.error("Auto-registration failed:", signUpError);
+                  // NO FALLBACK TO LOCAL STORAGE for Samuel
+                  setIsDemoMode(false);
+                }
+              }
+            } catch (err) {
+              console.error("Unexpected auth error:", err);
+              // NO FALLBACK TO LOCAL STORAGE for Samuel
+              setIsDemoMode(false);
+            }
+
+            setLoading(false);
           }
+        } else {
+          // Access Denied for non-Samuel
+          setLoading(false);
+        }
+      } else {
+        // Fallback for browser dev (Simulate Samuel if needed for testing, or rely on existing session)
+        if (existingSession) {
+          if (mounted) {
+            setSession(existingSession);
+            setLoading(false);
+          }
+        } else {
+          // In Browser dev without Telegram context, we might end up here.
+          // If you want to test in browser as Samuel, uncomment below:
+          /*
+          setTelegramUser({ id: 123, first_name: 'Samuel', username: 'samuel_melis' });
+          // Recursive call or reload would be needed, effectively just manual for now.
+          */
+          if (mounted) setLoading(false);
+        }
       }
     };
 
@@ -207,8 +206,8 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (mounted) {
         setSession(session);
         if (session) {
-            setIsDemoMode(false);
-            setLoading(false);
+          setIsDemoMode(false);
+          setLoading(false);
         }
       }
     });
@@ -232,28 +231,28 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [session, loading, isDemoMode]);
 
   const fetchLocalData = () => {
-      try {
-          const lExp = localStorage.getItem(LS_KEYS.EXPENSES);
-          const lInc = localStorage.getItem(LS_KEYS.INCOMES);
-          const lAss = localStorage.getItem(LS_KEYS.ASSETS);
-          const lSet = localStorage.getItem(LS_KEYS.SETTINGS);
+    try {
+      const lExp = localStorage.getItem(LS_KEYS.EXPENSES);
+      const lInc = localStorage.getItem(LS_KEYS.INCOMES);
+      const lAss = localStorage.getItem(LS_KEYS.ASSETS);
+      const lSet = localStorage.getItem(LS_KEYS.SETTINGS);
 
-          if (lExp) setExpenses(JSON.parse(lExp));
-          if (lInc) setIncomes(JSON.parse(lInc));
-          if (lAss) setAssets(JSON.parse(lAss));
-          if (lSet) {
-              setSettings(JSON.parse(lSet));
-          } else {
-             setSettings({ ...INITIAL_SETTINGS, userName: 'Samuel' });
-          }
-      } catch (e) {
-          console.error("Error reading local storage", e);
+      if (lExp) setExpenses(JSON.parse(lExp));
+      if (lInc) setIncomes(JSON.parse(lInc));
+      if (lAss) setAssets(JSON.parse(lAss));
+      if (lSet) {
+        setSettings(JSON.parse(lSet));
+      } else {
+        setSettings({ ...INITIAL_SETTINGS, userName: 'Samuel' });
       }
+    } catch (e) {
+      console.error("Error reading local storage", e);
+    }
   };
 
   const fetchCloudData = async () => {
     if (!session?.user) return;
-    
+
     const { data: expensesData } = await supabase.from('expenses').select('*').order('date', { ascending: false });
     if (expensesData) {
       const mappedExpenses = expensesData.map((e: any) => ({
@@ -291,9 +290,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         userName: settingsData.user_name
       });
     } else {
-        const displayName = telegramUser?.first_name || 'Freelancer';
-        const defaultSettings = { ...INITIAL_SETTINGS, userName: displayName };
-        await updateSettings(defaultSettings);
+      const displayName = telegramUser?.first_name || 'Freelancer';
+      const defaultSettings = { ...INITIAL_SETTINGS, userName: displayName };
+      await updateSettings(defaultSettings);
     }
   };
 
@@ -302,28 +301,27 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const addExpense = async (expense: Omit<Expense, 'id'>) => {
     const tempId = crypto.randomUUID();
     const newExpense = { ...expense, id: tempId };
-    const updatedExpenses = [newExpense, ...expenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
+    const updatedExpenses = [newExpense, ...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     setExpenses(updatedExpenses);
     triggerHaptic('success');
 
     if (session?.user) {
-        const { error } = await supabase.from('expenses').insert({
-            user_id: session.user.id,
-            amount_etb: expense.amountETB,
-            category: expense.category,
-            date: expense.date,
-            is_recurring: expense.isRecurring,
-            frequency: expense.frequency,
-            note: expense.note
-        });
-        if (error) {
-            triggerHaptic('error');
-            // Revert optimistic update on error if needed, or queue for sync
-            setExpenses(prev => prev.filter(e => e.id !== tempId));
-        }
-    } else if (isDemoMode) {
-        localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
+      const { error } = await supabase.from('expenses').insert({
+        user_id: session.user.id,
+        amount_etb: expense.amountETB,
+        category: expense.category,
+        date: expense.date,
+        is_recurring: expense.isRecurring,
+        frequency: expense.frequency,
+        note: expense.note
+      });
+      if (error) {
+        triggerHaptic('error');
+        setExpenses(prev => prev.filter(e => e.id !== tempId));
+      }
+    } else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) {
+      localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
     }
   };
 
@@ -332,7 +330,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = expenses.filter(e => e.id !== id);
     setExpenses(updated);
     if (session?.user) await supabase.from('expenses').delete().eq('id', id);
-    else if (isDemoMode) localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updated));
+    else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updated));
   };
 
   const addIncome = async (income: Omit<Income, 'id'>) => {
@@ -342,15 +340,15 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     setIncomes(updated);
     triggerHaptic('success');
     if (session?.user) {
-        const { error } = await supabase.from('incomes').insert({
-            user_id: session.user.id,
-            amount_usd: income.amountUSD,
-            source: income.source,
-            date: income.date,
-            type: income.type
-        });
-        if (error) setIncomes(prev => prev.filter(i => i.id !== tempId));
-    } else if (isDemoMode) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
+      const { error } = await supabase.from('incomes').insert({
+        user_id: session.user.id,
+        amount_usd: income.amountUSD,
+        source: income.source,
+        date: income.date,
+        type: income.type
+      });
+      if (error) setIncomes(prev => prev.filter(i => i.id !== tempId));
+    } else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
   };
 
   const deleteIncome = async (id: string) => {
@@ -358,7 +356,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = incomes.filter(i => i.id !== id);
     setIncomes(updated);
     if (session?.user) await supabase.from('incomes').delete().eq('id', id);
-    else if (isDemoMode) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
+    else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
   };
 
   const addAsset = async (asset: Omit<Asset, 'id'>) => {
@@ -368,14 +366,14 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     setAssets(updated);
     triggerHaptic('success');
     if (session?.user) {
-        const { error } = await supabase.from('assets').insert({
-            user_id: session.user.id,
-            name: asset.name,
-            amount_usd: asset.amountUSD,
-            type: asset.type
-        });
-        if (error) setAssets(prev => prev.filter(a => a.id !== tempId));
-    } else if (isDemoMode) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
+      const { error } = await supabase.from('assets').insert({
+        user_id: session.user.id,
+        name: asset.name,
+        amount_usd: asset.amountUSD,
+        type: asset.type
+      });
+      if (error) setAssets(prev => prev.filter(a => a.id !== tempId));
+    } else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
   };
 
   const deleteAsset = async (id: string) => {
@@ -383,46 +381,46 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = assets.filter(a => a.id !== id);
     setAssets(updated);
     if (session?.user) await supabase.from('assets').delete().eq('id', id);
-    else if (isDemoMode) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
+    else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
   };
 
   const updateSettings = async (newSettings: Partial<Settings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     if (session?.user) {
-        const dbSettings: any = {};
-        if (newSettings.exchangeRate !== undefined) dbSettings.exchange_rate = newSettings.exchangeRate;
-        if (newSettings.savingsGoalUSD !== undefined) dbSettings.savings_goal_usd = newSettings.savingsGoalUSD;
-        if (newSettings.recurringEnabled !== undefined) dbSettings.recurring_enabled = newSettings.recurringEnabled;
-        if (newSettings.userName !== undefined) dbSettings.user_name = newSettings.userName;
-        dbSettings.user_id = session.user.id;
-        await supabase.from('user_settings').upsert(dbSettings);
-    } else if (isDemoMode) localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(updated));
+      const dbSettings: any = {};
+      if (newSettings.exchangeRate !== undefined) dbSettings.exchange_rate = newSettings.exchangeRate;
+      if (newSettings.savingsGoalUSD !== undefined) dbSettings.savings_goal_usd = newSettings.savingsGoalUSD;
+      if (newSettings.recurringEnabled !== undefined) dbSettings.recurring_enabled = newSettings.recurringEnabled;
+      if (newSettings.userName !== undefined) dbSettings.user_name = newSettings.userName;
+      dbSettings.user_id = session.user.id;
+      await supabase.from('user_settings').upsert(dbSettings);
+    } else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(updated));
   };
 
   const resetData = async () => {
     if (window.confirm('Are you sure you want to delete all data?')) {
-       triggerHaptic('warning');
-       setExpenses([]); setIncomes([]); setAssets([]); setSettings(INITIAL_SETTINGS);
-       if (session?.user) {
-           await supabase.from('expenses').delete().eq('user_id', session.user.id);
-           await supabase.from('incomes').delete().eq('user_id', session.user.id);
-           await supabase.from('assets').delete().eq('user_id', session.user.id);
-           await supabase.from('user_settings').delete().eq('user_id', session.user.id);
-           await updateSettings(INITIAL_SETTINGS);
-       } else if (isDemoMode) {
-           localStorage.removeItem(LS_KEYS.EXPENSES);
-           localStorage.removeItem(LS_KEYS.INCOMES);
-           localStorage.removeItem(LS_KEYS.ASSETS);
-           localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-       }
+      triggerHaptic('warning');
+      setExpenses([]); setIncomes([]); setAssets([]); setSettings(INITIAL_SETTINGS);
+      if (session?.user) {
+        await supabase.from('expenses').delete().eq('user_id', session.user.id);
+        await supabase.from('incomes').delete().eq('user_id', session.user.id);
+        await supabase.from('assets').delete().eq('user_id', session.user.id);
+        await supabase.from('user_settings').delete().eq('user_id', session.user.id);
+        await updateSettings(INITIAL_SETTINGS);
+      } else if (isDemoMode && telegramUser?.username?.toLowerCase() !== ALLOWED_USERNAME) {
+        localStorage.removeItem(LS_KEYS.EXPENSES);
+        localStorage.removeItem(LS_KEYS.INCOMES);
+        localStorage.removeItem(LS_KEYS.ASSETS);
+        localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+      }
     }
   };
 
   const signOut = async () => {
-      triggerHaptic('light');
-      if (session) await supabase.auth.signOut();
-      window.location.reload();
+    triggerHaptic('light');
+    if (session) await supabase.auth.signOut();
+    window.location.reload();
   };
 
   return (
