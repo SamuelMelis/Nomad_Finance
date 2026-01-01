@@ -7,6 +7,27 @@
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
+    <!-- Error Logging for White Screen Debugging -->
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        // Ignore ResizeObserver errors which are common and harmless
+        if (msg.includes('ResizeObserver loop')) return;
+        
+        var div = document.createElement('div');
+        div.style = "position:fixed;top:0;left:0;right:0;bottom:0;background:white;color:red;padding:20px;z-index:9999;white-space:pre-wrap;font-family:monospace;overflow:auto;";
+        div.innerHTML = "<strong>Application Error</strong><br/><br/>" + msg + "<br/>" + (url || '') + ":" + (line || '') + ":" + (col || '') + "<br/><br/>" + (error && error.stack ? error.stack : '');
+        document.body.appendChild(div);
+      };
+      
+      // Handle Promise Rejections
+      window.onunhandledrejection = function(event) {
+        var div = document.createElement('div');
+        div.style = "position:fixed;top:0;left:0;right:0;bottom:0;background:white;color:red;padding:20px;z-index:9999;white-space:pre-wrap;font-family:monospace;overflow:auto;";
+        div.innerHTML = "<strong>Promise Error</strong><br/><br/>" + (event.reason ? event.reason.toString() : 'Unknown Promise Error');
+        document.body.appendChild(div);
+      };
+    </script>
+
     <!-- PWA / Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -46,11 +67,11 @@
   <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+    "recharts": "https://esm.sh/recharts@2.12.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react": "https://esm.sh/react@18.2.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
   }
 }
