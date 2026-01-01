@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Expense, Income, Asset, Settings, FinanceContextType, TelegramUser } from '../types';
+import { Expense, Income, Asset, Settings, FinanceContextType } from '../types';
 import { INITIAL_SETTINGS, DEMO_EXPENSES, DEMO_INCOMES, DEMO_ASSETS } from '../constants';
 import { Session } from '@supabase/supabase-js';
 
@@ -24,7 +24,12 @@ declare global {
           selectionChanged: () => void;
         };
         initDataUnsafe: {
-          user?: TelegramUser;
+          user?: {
+            username?: string;
+            first_name?: string;
+            last_name?: string;
+            id?: number;
+          };
         };
         initData: string;
       };
@@ -33,6 +38,9 @@ declare global {
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
+
+// STRICT ACCESS CONTROL
+const ALLOWED_USER = 'Samuel_Melis'; 
 
 // Helper for LocalStorage
 const LS_KEYS = {
@@ -50,9 +58,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [settings, setSettings] = useState<Settings>(INITIAL_SETTINGS);
   
   const [loading, setLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [isTelegramEnv, setIsTelegramEnv] = useState(false);
-  const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   
   // UI Control
   const [isTabBarHidden, setTabBarHidden] = useState(false);
@@ -79,7 +88,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // 1. Handle Auth Session & Telegram Setup
+  // 1. Handle Auth Session & Telegram Gatekeeping
   useEffect(() => {
     let mounted = true;
     
@@ -110,22 +119,34 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (mounted) setIsTelegramEnv(!!isTgPlatform);
 
       const tgUser = tg?.initDataUnsafe?.user;
+      const rawUsername = tgUser?.username || '';
+      const username = rawUsername.toLowerCase().trim();
       
-      if (isTgPlatform && tgUser) {
-          if (mounted) setTelegramUser(tgUser);
+      // Compare lowercased username with lowercased allowed user for safety
+      const isAllowedUser = username === ALLOWED_USER.toLowerCase();
+
+      // STRICT GATEKEEPING FOR TELEGRAM
+      if (isTgPlatform) {
+          if (!username || !isAllowedUser) {
+            if (mounted) {
+                setAuthError(`Access Restricted. This app is for @${ALLOWED_USER} only.`);
+                setLoading(false);
+                setIsAuthorized(false);
+            }
+            return;
+          }
       }
 
-      // If we are here, we are either in Browser (Demo) or Telegram
+      // If we are here, we are either in Browser (Demo) or it is the Allowed User
       const isDemo = !isTgPlatform; 
 
       if (mounted) {
+        setIsAuthorized(true);
         setIsDemoMode(isDemo);
       }
 
       try {
         // A. Check existing session first
-        // Supabase automatically persists session to storage. 
-        // If the user logged in previously, this returns the session.
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         
         if (existingSession) {
@@ -137,10 +158,68 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           return;
         } 
         
-        // B. If no session, stop loading.
-        // App.tsx will see (!session && !demo) and show Auth component.
-        // Auth component will use telegramUser data to simplify login.
+        // B. If in Telegram and is Allowed User -> Auto Login/Register
+        if (isTgPlatform && isAllowedUser) {
+          // Generate deterministic credentials (using lowercase username for consistency)
+          const autoEmail = `tg_${username}@nomadfinance.app`;
+          // Consistent password based on ID to ensure ability to login
+          const autoPassword = `nomad_secure_${username}_${tgUser?.id || 'id'}`; 
+          
+          console.log("Attempting Auto-Login for", autoEmail);
+
+          // 1. Try Sign In
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: autoEmail,
+              password: autoPassword
+          });
+
+          if (!signInError && signInData.session) {
+             console.log("Sign In Successful");
+             if (mounted) {
+               setSession(signInData.session);
+               setLoading(false);
+             }
+             return;
+          }
+
+          console.log("Sign In failed, attempting Sign Up for Sami...");
+
+          // 2. Try Sign Up (if Sign In failed)
+          // Explicitly setting full_name to "Sami" as requested
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: autoEmail,
+            password: autoPassword,
+            options: {
+                data: {
+                    username: rawUsername, // Store the original username
+                    full_name: 'Sami' // Forced name registration
+                }
+            }
+          });
+
+          if (signUpError) {
+              console.error("Sign Up failed:", signUpError);
+              setAuthError("Failed to register account on cloud.");
+          } else if (signUpData.session) {
+              console.log("Sign Up Successful as Sami");
+              if (mounted) setSession(signUpData.session);
+          } else {
+             // Case where user might be created but no session returned (confirm email setting)
+             // We attempt one last sign in just in case of race condition
+             const { data: retryData } = await supabase.auth.signInWithPassword({
+                email: autoEmail,
+                password: autoPassword
+             });
+             if (retryData.session && mounted) {
+                 setSession(retryData.session);
+             } else {
+                 console.warn("User created but no session. Email confirmation might be required.");
+                 setAuthError("Account requires email verification. Check Supabase settings.");
+             }
+          }
+        } 
         
+        // C. Fallback completes
         if (mounted) setLoading(false);
         if (isDemo && mounted) loadDemoData();
 
@@ -170,14 +249,16 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // 2. Fetch Data (Cloud OR Local)
   useEffect(() => {
-    if (!loading) {
+    if (!loading && isAuthorized) {
       if (session?.user) {
         fetchCloudData();
       } else if (isDemoMode) {
+        // Only fetch local data if in Demo mode (Browser)
+        // If in Telegram but no session, we stay empty to avoid local storage confusion for the main user
         fetchLocalData();
       }
     }
-  }, [session, loading, isDemoMode]);
+  }, [session, isAuthorized, loading, isDemoMode]);
 
   const fetchLocalData = () => {
       try {
@@ -192,6 +273,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           if (lSet) {
               setSettings(JSON.parse(lSet));
           } else {
+             // Init settings if first time local
              const defaultSettings = {
                 ...INITIAL_SETTINGS,
                 userName: 'Freelancer'
@@ -260,13 +342,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         userName: settingsData.user_name
       });
     } else {
-        // If new user and no settings, create default settings
-        // Use Telegram Name if available
-        const displayName = telegramUser?.first_name || 'Freelancer';
-        
         const defaultSettings = {
             ...INITIAL_SETTINGS,
-            userName: displayName
+            userName: 'Sami' // Default name for the cloud profile
         };
         await updateSettings(defaultSettings);
     }
@@ -297,6 +375,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (error) {
             console.error('Error adding expense:', error);
             triggerHaptic('error');
+            // Revert
             setExpenses(prev => prev.filter(e => e.id !== tempId));
         } else {
             fetchCloudData(); 
@@ -440,17 +519,30 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       deleteAsset,
       updateSettings,
       resetData,
-      session,
+      session: isAuthorized ? session : null, 
       signOut,
-      loading,
-      isDemoMode,
+      loading: loading,
+      isDemoMode: isDemoMode,
       setTabBarHidden,
       isTabBarHidden,
       triggerHaptic,
-      isTelegramEnv,
-      telegramUser
+      isTelegramEnv
     }}>
-      {children}
+      {/* Error Screen */}
+      {authError ? (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-white p-8 text-center">
+            <div className="bg-red-50 p-4 rounded-full mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h1 className="text-xl font-bold text-[#18181b] mb-2">Access Denied</h1>
+            <p className="text-sm text-gray-500 max-w-xs mb-4">
+                This application is private.
+            </p>
+            <p className="text-xs text-gray-400 font-mono bg-gray-100 p-2 rounded break-all">
+                {authError}
+            </p>
+        </div>
+      ) : children}
     </FinanceContext.Provider>
   );
 };
