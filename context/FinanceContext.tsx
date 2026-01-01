@@ -11,8 +11,17 @@ declare global {
       WebApp: {
         ready: () => void;
         expand: () => void;
+        requestFullscreen: () => void; // New method to enter fullscreen
+        platform: string;
         setHeaderColor: (color: string) => void;
         setBackgroundColor: (color: string) => void;
+        addToHomeScreen: () => void; 
+        checkHomeScreenStatus: (callback: (status: string) => void) => void; 
+        HapticFeedback: {
+          impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+          notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
+          selectionChanged: () => void;
+        };
         initDataUnsafe: {
           user?: {
             username?: string;
@@ -20,6 +29,7 @@ declare global {
             id?: number;
           };
         };
+        initData: string;
       };
     };
   }
@@ -40,6 +50,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isTelegramEnv, setIsTelegramEnv] = useState(false);
   
   // UI Control
   const [isTabBarHidden, setTabBarHidden] = useState(false);
@@ -53,48 +64,78 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     setLoading(false);
   };
 
+  // Telegram Haptic Helper
+  const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'error' | 'success' | 'warning') => {
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      if (['error', 'success', 'warning'].includes(style)) {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred(style as 'error' | 'success' | 'warning');
+      } else {
+        window.Telegram.WebApp.HapticFeedback.impactOccurred(style as 'light' | 'medium' | 'heavy' | 'rigid' | 'soft');
+      }
+    }
+  };
+
   // 1. Handle Auth Session & Telegram Gatekeeping
   useEffect(() => {
     let mounted = true;
 
+    // Safety timeout to prevent infinite loading
+    const safetyTimeout = setTimeout(() => {
+        if (mounted && loading) {
+            console.warn("Auth initialization timed out, forcing load completion.");
+            setLoading(false);
+        }
+    }, 3000);
+
     // Initialize Telegram Web App
     if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
-      
-      // Match the App Theme
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+
+      // Request Fullscreen to hide the title bar (Try/Catch for safety)
       try {
-        window.Telegram.WebApp.setHeaderColor('#ffffff');
-        window.Telegram.WebApp.setBackgroundColor('#ffffff');
+        if (tg.requestFullscreen) {
+            tg.requestFullscreen();
+        }
+      } catch (e) {
+          console.log("Fullscreen not supported or failed:", e);
+      }
+      
+      // Match the App Theme and Header to Background (as fallback)
+      try {
+        tg.setHeaderColor('#ffffff');
+        tg.setBackgroundColor('#ffffff');
       } catch (e) {
         console.log('Error setting theme', e);
       }
     }
 
     const initializeAuth = async () => {
-      // 1. Check Telegram User
-      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-      const username = tgUser?.username;
-
-      // Logic: 
-      // - If running in Telegram (username exists), MUST match ALLOWED_USER.
-      // - If running in Browser (no username), Allow as Demo User.
+      // 1. Check Telegram Environment
+      const tg = window.Telegram?.WebApp;
+      const isTgPlatform = tg && (tg.platform !== 'unknown' || tg.initData.length > 0);
       
-      const isTelegramEnv = !!username;
+      if (mounted) setIsTelegramEnv(!!isTgPlatform);
+
+      const tgUser = tg?.initDataUnsafe?.user;
+      const username = tgUser?.username;
+      
       const isAllowedUser = username === ALLOWED_USER;
 
       // STRICT GATEKEEPING FOR TELEGRAM
-      if (isTelegramEnv && !isAllowedUser) {
+      if (isTgPlatform && username && !isAllowedUser) {
         if (mounted) {
           setAuthError(`Access Restricted. Allowed: @${ALLOWED_USER}, Found: @${username}`);
           setLoading(false);
           setIsAuthorized(false);
         }
+        clearTimeout(safetyTimeout);
         return;
       }
 
       // DETERMINE DEMO MODE (Browser or explicit allowed user with DB issues)
-      const isDemo = !isTelegramEnv; 
+      const isDemo = !isTgPlatform; 
 
       if (mounted) {
         setIsAuthorized(true);
@@ -120,11 +161,13 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
                 // FALLBACK TO LOCAL DEMO MODE if DB fails in browser
                 console.warn("Falling back to local demo mode due to DB error");
                 loadDemoData();
+                clearTimeout(safetyTimeout);
                 return;
             } else if (mounted) {
                 setAuthError("Database connection failed. Check Supabase 'Anonymous Sign-ins' setting.");
                 setLoading(false);
             }
+            clearTimeout(safetyTimeout);
             return;
           }
           
@@ -143,6 +186,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
            setLoading(false);
         }
       }
+      clearTimeout(safetyTimeout);
     };
 
     initializeAuth();
@@ -163,13 +207,13 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     return () => {
       mounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
 
   // 2. Fetch Data when Session is active
   useEffect(() => {
-    // Only fetch from DB if we have a real session and NOT just falling back to demo
     if (session?.user && isAuthorized) {
       fetchData();
     }
@@ -246,14 +290,13 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const tempId = crypto.randomUUID();
     const newExpense = { ...expense, id: tempId };
     
-    // Optimistic Update
     setExpenses(prev => {
-        // Sort by date descending when adding
         const updated = [newExpense, ...prev];
         return updated.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     });
 
-    // If local demo, stop here
+    triggerHaptic('success');
+
     if (!session?.user) return;
 
     const { error } = await supabase.from('expenses').insert({
@@ -268,7 +311,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     if (error) {
         console.error('Error adding expense:', error);
-        // Rollback
+        triggerHaptic('error');
         setExpenses(prev => prev.filter(e => e.id !== tempId));
     } else {
         fetchData(); 
@@ -276,6 +319,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const deleteExpense = async (id: string) => {
+    triggerHaptic('medium');
     setExpenses(prev => prev.filter(e => e.id !== id));
     
     if (!session?.user) return;
@@ -286,6 +330,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const tempId = crypto.randomUUID();
     const newIncome = { ...income, id: tempId };
     setIncomes(prev => [newIncome, ...prev]);
+    triggerHaptic('success');
 
     if (!session?.user) return;
 
@@ -306,6 +351,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const deleteIncome = async (id: string) => {
+    triggerHaptic('medium');
     setIncomes(prev => prev.filter(i => i.id !== id));
     
     if (!session?.user) return;
@@ -316,6 +362,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const tempId = crypto.randomUUID();
     const newAsset = { ...asset, id: tempId };
     setAssets(prev => [newAsset, ...prev]);
+    triggerHaptic('success');
 
     if (!session?.user) return;
 
@@ -334,6 +381,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const deleteAsset = async (id: string) => {
+    triggerHaptic('medium');
     setAssets(prev => prev.filter(a => a.id !== id));
     
     if (!session?.user) return;
@@ -358,6 +406,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const resetData = async () => {
     if (window.confirm('Are you sure you want to delete all data?')) {
+       triggerHaptic('warning');
        setExpenses([]);
        setIncomes([]);
        setAssets([]);
@@ -374,6 +423,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const signOut = async () => {
+      triggerHaptic('light');
       await supabase.auth.signOut();
   };
 
@@ -396,11 +446,11 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       loading: loading,
       isDemoMode: isDemoMode,
       setTabBarHidden,
-      isTabBarHidden
+      isTabBarHidden,
+      triggerHaptic,
+      isTelegramEnv
     }}>
-      {/* 
-         Error Screen
-      */}
+      {/* Error Screen */}
       {authError ? (
           <div className="min-h-screen flex flex-col items-center justify-center bg-white p-8 text-center">
             <div className="bg-red-50 p-4 rounded-full mb-4">

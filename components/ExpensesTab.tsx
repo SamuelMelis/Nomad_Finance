@@ -29,7 +29,7 @@ const CATEGORY_ICONS: Record<Category, React.ElementType> = {
 };
 
 export const ExpensesTab: React.FC = () => {
-  const { expenses, addExpense, settings, deleteExpense, setTabBarHidden } = useFinance();
+  const { expenses, addExpense, settings, deleteExpense, setTabBarHidden, triggerHaptic } = useFinance();
   const [isAdding, setIsAdding] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   
@@ -45,6 +45,21 @@ export const ExpensesTab: React.FC = () => {
     setTabBarHidden(isAdding);
     return () => setTabBarHidden(false);
   }, [isAdding, setTabBarHidden]);
+
+  const handleOpenAdd = () => {
+      triggerHaptic('light');
+      setIsAdding(true);
+  };
+
+  const handleCloseAdd = () => {
+      triggerHaptic('soft');
+      setIsAdding(false);
+  };
+
+  const handleCategorySelect = (cat: Category) => {
+      triggerHaptic('light');
+      setCategory(cat);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +78,11 @@ export const ExpensesTab: React.FC = () => {
     setNote('');
     setIsRecurring(false);
     setIsAdding(false);
+  };
+
+  const handleDaySelect = (day: string) => {
+      triggerHaptic('light');
+      setSelectedDay(day);
   };
 
   const groupedExpenses = useMemo(() => {
@@ -98,7 +118,7 @@ export const ExpensesTab: React.FC = () => {
       {/* Add Expense Button */}
       {!isAdding && (
         <button 
-          onClick={() => setIsAdding(true)}
+          onClick={handleOpenAdd}
           className="w-full bg-gradient-to-br from-[#18181b] to-[#27272a] text-white py-5 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-10 group"
         >
           <span className="w-6 h-6 rounded-full border border-white/30 flex items-center justify-center">
@@ -115,7 +135,7 @@ export const ExpensesTab: React.FC = () => {
              <div className="flex justify-between items-center mb-8">
                <h3 className="text-xl font-bold tracking-tight text-[#18181b]">New Entry</h3>
                <button 
-                onClick={() => setIsAdding(false)}
+                onClick={handleCloseAdd}
                 className="w-10 h-10 rounded-full bg-gray-100 text-[#18181b] flex items-center justify-center hover:bg-gray-200 transition-colors"
                >
                  <X size={20} />
@@ -151,7 +171,7 @@ export const ExpensesTab: React.FC = () => {
                         <button
                           key={cat.value}
                           type="button"
-                          onClick={() => setCategory(cat.value as Category)}
+                          onClick={() => handleCategorySelect(cat.value as Category)}
                           className={`h-16 rounded-xl flex flex-col items-center justify-center gap-1 transition-all border ${
                             isSelected 
                               ? 'bg-[#18181b] text-white border-[#18181b] shadow-md scale-[1.02]' 
@@ -191,7 +211,10 @@ export const ExpensesTab: React.FC = () => {
 
                   {settings.recurringEnabled && (
                     <div 
-                      onClick={() => setIsRecurring(!isRecurring)}
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setIsRecurring(!isRecurring);
+                      }}
                       className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${isRecurring ? 'bg-[#18181b] border-[#18181b] text-white' : 'bg-white border-gray-200 text-gray-500'}`}
                     >
                       <span className="text-sm font-bold">Recurring Monthly</span>
@@ -326,7 +349,7 @@ export const ExpensesTab: React.FC = () => {
           return (
             <div 
               key={day} 
-              onClick={() => setSelectedDay(day)}
+              onClick={() => handleDaySelect(day)}
               className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between active:scale-[0.99] transition-all cursor-pointer hover:border-gray-300"
             >
                <div className="flex items-center gap-4">

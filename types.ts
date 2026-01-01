@@ -61,4 +61,8 @@ export interface FinanceContextType {
   // UI Control
   setTabBarHidden: (hidden: boolean) => void;
   isTabBarHidden: boolean;
+  
+  // Telegram Specific
+  triggerHaptic: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'error' | 'success' | 'warning') => void;
+  isTelegramEnv: boolean;
 }

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useFinance } from '../context/FinanceContext';
-import { Save, RefreshCw, ArrowRight, LogOut, Download, Share, Smartphone, Check } from 'lucide-react';
+import { Save, RefreshCw, ArrowRight, LogOut, Download, Smartphone, Check, Zap, HelpCircle } from 'lucide-react';
 
 export const SettingsTab: React.FC = () => {
-  const { settings, updateSettings, signOut, isDemoMode } = useFinance();
+  const { settings, updateSettings, signOut, isDemoMode, isTelegramEnv, triggerHaptic } = useFinance();
   
   // PWA / Install Logic
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
@@ -15,17 +14,13 @@ export const SettingsTab: React.FC = () => {
     const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     setIsStandalone(isInStandaloneMode);
 
-    // 2. Detect iOS for manual instructions
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIosDevice);
-
-    // 3. Listen for Android/Chrome install prompt
+    // 2. Listen for Android/Chrome install prompt
     const handleBeforeInstallPrompt = (e: any) => {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
       // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
+      console.log("Install prompt captured");
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -35,8 +30,14 @@ export const SettingsTab: React.FC = () => {
     };
   }, []);
 
+  // Standard PWA Install (Browser) - Attempts to prompt native dialog
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+    triggerHaptic('medium');
+    if (!deferredPrompt) {
+        // User requested no guide/menu interaction, so we just alert if unavailable.
+        alert("Install prompt unavailable. Please use the browser menu.");
+        return;
+    }
 
     // Show the install prompt
     deferredPrompt.prompt();
@@ -47,6 +48,16 @@ export const SettingsTab: React.FC = () => {
     if (outcome === 'accepted') {
       console.log('User accepted the install prompt');
       setDeferredPrompt(null);
+    }
+  };
+
+  // Telegram Specific Shortcut
+  const handleTelegramShortcut = () => {
+    triggerHaptic('medium');
+    if (window.Telegram?.WebApp?.addToHomeScreen) {
+        window.Telegram.WebApp.addToHomeScreen();
+    } else {
+        alert("Feature not supported in this Telegram version.");
     }
   };
 
@@ -70,52 +81,61 @@ export const SettingsTab: React.FC = () => {
         </button>
       </div>
 
-      {/* App Installation Section */}
-      {!isStandalone && (deferredPrompt || isIOS) && (
+      {/* TELEGRAM SHORTCUT SECTION (Only if in Telegram) */}
+      {isTelegramEnv && (
+        <section>
+            <div className="flex items-center gap-3 mb-4">
+                <Smartphone size={18} className="text-[#18181b]" />
+                <h3 className="font-bold text-[#18181b] text-sm uppercase tracking-wider">App Shortcut</h3>
+            </div>
+            
+            <button 
+                onClick={handleTelegramShortcut}
+                className="w-full bg-[#18181b] text-white p-5 rounded-2xl flex items-center justify-between shadow-lg active:scale-[0.98] transition-all"
+            >
+                <div className="flex flex-col items-start">
+                    <span className="font-bold text-sm">Add to Home Screen</span>
+                    <span className="text-[10px] text-gray-400 font-medium">Quick access to Mini App</span>
+                </div>
+                <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
+                    <Zap size={20} />
+                </div>
+            </button>
+        </section>
+      )}
+
+      {/* BROWSER PWA INSTALL SECTION (Only if NOT in Telegram and NOT Installed) */}
+      {!isTelegramEnv && !isStandalone && (
         <section>
             <div className="flex items-center gap-3 mb-4">
                 <Smartphone size={18} className="text-[#18181b]" />
                 <h3 className="font-bold text-[#18181b] text-sm uppercase tracking-wider">App Installation</h3>
             </div>
 
-            {/* Android / Desktop Button */}
-            {deferredPrompt && (
-                <button 
-                    onClick={handleInstallClick}
-                    className="w-full bg-[#18181b] text-white p-5 rounded-2xl flex items-center justify-between shadow-lg active:scale-[0.98] transition-all"
-                >
-                    <div className="flex flex-col items-start">
-                        <span className="font-bold text-sm">Install App</span>
-                        <span className="text-[10px] text-gray-400 font-medium">Add to your home screen</span>
-                    </div>
-                    <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
-                        <Download size={20} />
-                    </div>
-                </button>
-            )}
-
-            {/* iOS Instructions */}
-            {isIOS && !deferredPrompt && (
-                <div className="bg-white border border-gray-200 p-5 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-bold text-[#18181b] uppercase tracking-wider">Install on iOS</span>
-                    </div>
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3 text-sm text-gray-600">
-                            <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-[10px] font-bold">1</span>
-                            <span>Tap the <strong className="text-[#18181b]">Share</strong> button <Share size={12} className="inline ml-1" /></span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-gray-600">
-                            <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-[10px] font-bold">2</span>
-                            <span>Scroll down & tap <strong className="text-[#18181b]">Add to Home Screen</strong></span>
-                        </div>
-                    </div>
+            {/* Main Install Button - Always shown if not installed. Manual guide removed as requested. */}
+            <button 
+                onClick={handleInstallClick}
+                className={`w-full p-5 rounded-2xl flex items-center justify-between shadow-lg active:scale-[0.98] transition-all ${
+                    deferredPrompt ? 'bg-[#18181b] text-white' : 'bg-white border border-gray-200 text-[#18181b]'
+                }`}
+            >
+                <div className="flex flex-col items-start">
+                    <span className="font-bold text-sm">
+                        {deferredPrompt ? 'Install App' : 'Add to Home Screen'}
+                    </span>
+                    <span className={`text-[10px] font-medium ${deferredPrompt ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {deferredPrompt ? 'Tap to install' : 'Tap to add'}
+                    </span>
                 </div>
-            )}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${deferredPrompt ? 'bg-white/10' : 'bg-gray-100'}`}>
+                    {deferredPrompt ? <Download size={20} /> : <HelpCircle size={20} />}
+                </div>
+            </button>
         </section>
       )}
 
-      {isStandalone && (
+      {/* Show Installed Status if standalone, or if in Telegram show nothing about installation */}
+      {isStandalone && !isTelegramEnv && (
          <section>
             <div className="flex items-center gap-3 mb-4">
                 <Smartphone size={18} className="text-[#18181b]" />
