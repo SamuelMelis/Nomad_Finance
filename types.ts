@@ -38,6 +38,13 @@ export interface Settings {
   userName: string;
 }
 
+export interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+}
+
 export interface FinanceContextType {
   expenses: Expense[];
   incomes: Income[];
@@ -65,4 +72,5 @@ export interface FinanceContextType {
   // Telegram Specific
   triggerHaptic: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'error' | 'success' | 'warning') => void;
   isTelegramEnv: boolean;
+  telegramUser: TelegramUser | null;
 }
