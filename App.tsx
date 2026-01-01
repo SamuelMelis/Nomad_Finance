@@ -55,7 +55,7 @@ const AppContent: React.FC = () => {
         {/* Main Content Area - Reduced Padding */}
         <main
           className="px-5 min-h-screen"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3rem)' }}
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 5.5rem)' }}
         >
           {renderTab()}
         </main>
