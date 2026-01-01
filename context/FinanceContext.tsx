@@ -11,6 +11,8 @@ declare global {
       WebApp: {
         ready: () => void;
         expand: () => void;
+        setHeaderColor: (color: string) => void;
+        setBackgroundColor: (color: string) => void;
         initDataUnsafe: {
           user?: {
             username?: string;
@@ -59,6 +61,14 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.ready();
       window.Telegram.WebApp.expand();
+      
+      // Match the App Theme
+      try {
+        window.Telegram.WebApp.setHeaderColor('#ffffff');
+        window.Telegram.WebApp.setBackgroundColor('#ffffff');
+      } catch (e) {
+        console.log('Error setting theme', e);
+      }
     }
 
     const initializeAuth = async () => {

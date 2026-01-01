@@ -55,7 +55,7 @@ const AppContent: React.FC = () => {
 
         {/* Bottom Navigation */}
         {!isTabBarHidden && (
-            <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 pb-8 pt-4 px-6 z-50 max-w-md mx-auto animate-in slide-in-from-bottom-full duration-300">
+            <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 pt-4 px-6 z-50 max-w-md mx-auto animate-in slide-in-from-bottom-full duration-300 pb-[calc(2rem+env(safe-area-inset-bottom))]">
             <div className="flex justify-between items-center">
                 
                 <NavButton 

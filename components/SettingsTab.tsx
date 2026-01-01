@@ -1,9 +1,54 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFinance } from '../context/FinanceContext';
-import { Save, RefreshCw, ArrowRight, LogOut } from 'lucide-react';
+import { Save, RefreshCw, ArrowRight, LogOut, Download, Share, Smartphone, Check } from 'lucide-react';
 
 export const SettingsTab: React.FC = () => {
   const { settings, updateSettings, signOut, isDemoMode } = useFinance();
+  
+  // PWA / Install Logic
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    // 1. Check if already running in standalone mode (installed)
+    const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    setIsStandalone(isInStandaloneMode);
+
+    // 2. Detect iOS for manual instructions
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIosDevice);
+
+    // 3. Listen for Android/Chrome install prompt
+    const handleBeforeInstallPrompt = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+
+    // Show the install prompt
+    deferredPrompt.prompt();
+
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt');
+      setDeferredPrompt(null);
+    }
+  };
 
   return (
     <div className="space-y-8 pb-32 animate-in fade-in duration-500">
@@ -24,6 +69,66 @@ export const SettingsTab: React.FC = () => {
            <LogOut size={20} />
         </button>
       </div>
+
+      {/* App Installation Section */}
+      {!isStandalone && (deferredPrompt || isIOS) && (
+        <section>
+            <div className="flex items-center gap-3 mb-4">
+                <Smartphone size={18} className="text-[#18181b]" />
+                <h3 className="font-bold text-[#18181b] text-sm uppercase tracking-wider">App Installation</h3>
+            </div>
+
+            {/* Android / Desktop Button */}
+            {deferredPrompt && (
+                <button 
+                    onClick={handleInstallClick}
+                    className="w-full bg-[#18181b] text-white p-5 rounded-2xl flex items-center justify-between shadow-lg active:scale-[0.98] transition-all"
+                >
+                    <div className="flex flex-col items-start">
+                        <span className="font-bold text-sm">Install App</span>
+                        <span className="text-[10px] text-gray-400 font-medium">Add to your home screen</span>
+                    </div>
+                    <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
+                        <Download size={20} />
+                    </div>
+                </button>
+            )}
+
+            {/* iOS Instructions */}
+            {isIOS && !deferredPrompt && (
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs font-bold text-[#18181b] uppercase tracking-wider">Install on iOS</span>
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3 text-sm text-gray-600">
+                            <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-[10px] font-bold">1</span>
+                            <span>Tap the <strong className="text-[#18181b]">Share</strong> button <Share size={12} className="inline ml-1" /></span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-gray-600">
+                            <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-[10px] font-bold">2</span>
+                            <span>Scroll down & tap <strong className="text-[#18181b]">Add to Home Screen</strong></span>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </section>
+      )}
+
+      {isStandalone && (
+         <section>
+            <div className="flex items-center gap-3 mb-4">
+                <Smartphone size={18} className="text-[#18181b]" />
+                <h3 className="font-bold text-[#18181b] text-sm uppercase tracking-wider">App Status</h3>
+            </div>
+            <div className="bg-green-50 border border-green-100 p-4 rounded-2xl flex items-center gap-3 text-green-700">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <Check size={16} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider">App Installed</span>
+            </div>
+         </section>
+      )}
 
       {/* Exchange Rate Card */}
       <section>
@@ -106,7 +211,7 @@ export const SettingsTab: React.FC = () => {
           <div className="w-4 h-4 rounded-full bg-[#18181b]"></div>
         </div>
         <p className="text-[10px] text-[#18181b] font-mono uppercase tracking-widest">
-            NomadFinance v3.1 {isDemoMode ? '(Demo)' : '(Connected)'}
+            NomadFinance v3.2 {isDemoMode ? '(Demo)' : '(Connected)'}
         </p>
       </div>
     </div>
