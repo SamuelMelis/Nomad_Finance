@@ -23,14 +23,7 @@ const AppContent: React.FC = () => {
 
   // Allow render if we have a session OR we are in demo mode
   if (!session && !isDemoMode) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-white p-6 text-center">
-            <div>
-                <h2 className="text-xl font-bold text-[#18181b] mb-2">Authentication Required</h2>
-                <p className="text-gray-500 text-sm">Unable to verify session or load demo mode.</p>
-            </div>
-        </div>
-      );
+      return null; 
   }
 
   const renderTab = () => {
