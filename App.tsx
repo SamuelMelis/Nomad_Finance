@@ -29,8 +29,8 @@ const AppContent: React.FC = () => {
 
   // Show Auth if:
   // 1. No Session exists
-  // 2. AND Not in Demo Mode
-  // Note: We removed !isTelegramEnv so Auth shows in Telegram if not logged in
+  // 2. AND Not in Demo Mode (Local fallback)
+  // If we are in Demo Mode, we bypass auth.
   const showAuth = !authSession && !isDemoMode;
 
   if (showAuth) {
@@ -52,10 +52,10 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-white text-[#18181b] font-sans selection:bg-[#18181b] selection:text-white">
       <div className="max-w-md mx-auto min-h-screen relative bg-white border-x border-gray-50 shadow-2xl">
         
-        {/* Main Content Area - Adjusted top padding (Reduced from 3.6rem to 2.5rem - approx 30% less) */}
+        {/* Main Content Area - Reduced Padding */}
         <main 
           className="px-5 min-h-screen"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 2.5rem)' }}
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.75rem)' }}
         >
           {renderTab()}
         </main>

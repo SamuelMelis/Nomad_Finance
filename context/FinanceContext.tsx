@@ -43,8 +43,8 @@ const LS_KEYS = {
 };
 
 const ALLOWED_USERNAME = 'samuel_melis';
-// Internal credentials for seamless auth (Zero-Interaction)
-const AUTO_EMAIL = 'tg_samuel_melis@nomadfinance.app';
+// Versioned email to ensure a clean start if previous credentials conflicted
+const AUTO_EMAIL = 'tg_samuel_melis_v5@nomadfinance.app';
 const AUTO_PASS = 'Nomad_Internal_Secret_2024!'; 
 
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -78,12 +78,16 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   useEffect(() => {
     let mounted = true;
     
+    // Safety timeout: If auth takes too long, fall back to local mode to let the user in.
     const safetyTimeout = setTimeout(() => {
         if (mounted && loading) {
-            console.warn("Auth check timed out.");
-            setLoading(false);
+            console.warn("Auth check timed out. Forcing entry via Local Mode.");
+            if (telegramUser?.username?.toLowerCase() === ALLOWED_USERNAME) {
+                setIsDemoMode(true); // Fallback to local
+                setLoading(false);
+            }
         }
-    }, 6000); // Increased timeout for auto-login latency
+    }, 8000);
 
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
@@ -115,51 +119,61 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           const isAllowed = tgUser.username && tgUser.username.toLowerCase() === ALLOWED_USERNAME;
           
           if (isAllowed) {
-              setIsDemoMode(false);
               
               if (existingSession) {
+                  // Session exists and is valid
                   setSession(existingSession);
+                  setIsDemoMode(false);
                   setLoading(false);
               } else {
                   // --- AUTOMATIC LOGIN SEQUENCE ---
                   // No password prompt. Backend logic.
                   console.log("Attempting auto-login for allowed user...");
                   
-                  // 1. Try Login
-                  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                      email: AUTO_EMAIL,
-                      password: AUTO_PASS
-                  });
-
-                  if (signInData.session) {
-                      setSession(signInData.session);
-                      setLoading(false);
-                      return;
-                  }
-
-                  // 2. If Login failed, Try Register (First time use)
-                  if (signInError) {
-                      console.log("Auto-login failed, attempting auto-registration...", signInError.message);
-                      
-                      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                  try {
+                      // 1. Try Login
+                      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
                           email: AUTO_EMAIL,
-                          password: AUTO_PASS,
-                          options: {
-                              data: {
-                                  username: tgUser.username,
-                                  full_name: tgUser.first_name
-                              }
-                          }
+                          password: AUTO_PASS
                       });
 
-                      if (signUpData.session) {
-                          setSession(signUpData.session);
-                      } else {
-                          console.error("Auto-registration failed:", signUpError);
-                          // Loading stays true or false? 
-                          // Set false to let Auth component show generic error
+                      if (signInData.session) {
+                          setSession(signInData.session);
+                          setIsDemoMode(false);
+                          setLoading(false);
+                          return;
                       }
+
+                      // 2. If Login failed, Try Register (First time use)
+                      if (signInError) {
+                          console.log("Auto-login failed, attempting auto-registration...", signInError.message);
+                          
+                          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                              email: AUTO_EMAIL,
+                              password: AUTO_PASS,
+                              options: {
+                                  data: {
+                                      username: tgUser.username,
+                                      full_name: tgUser.first_name
+                                  }
+                              }
+                          });
+
+                          if (signUpData.session) {
+                              setSession(signUpData.session);
+                              setIsDemoMode(false);
+                          } else {
+                              console.error("Auto-registration failed:", signUpError);
+                              // Critical Failure: Fallback to Local Mode so user can still use app
+                              setIsDemoMode(true);
+                          }
+                      }
+                  } catch (err) {
+                      console.error("Unexpected auth error:", err);
+                      // Critical Failure: Fallback to Local Mode
+                      setIsDemoMode(true);
                   }
+                  
                   setLoading(false);
               }
           } else {
@@ -167,13 +181,19 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
               setLoading(false);
           }
       } else {
-          // Fallback for browser dev
+          // Fallback for browser dev (Simulate Samuel if needed for testing, or rely on existing session)
           if (existingSession) {
              if (mounted) {
                  setSession(existingSession);
                  setLoading(false);
              }
           } else {
+             // In Browser dev without Telegram context, we might end up here.
+             // If you want to test in browser as Samuel, uncomment below:
+             /*
+             setTelegramUser({ id: 123, first_name: 'Samuel', username: 'samuel_melis' });
+             // Recursive call or reload would be needed, effectively just manual for now.
+             */
              if (mounted) setLoading(false);
           }
       }
@@ -186,7 +206,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
-        if (session) setLoading(false);
+        if (session) {
+            setIsDemoMode(false);
+            setLoading(false);
+        }
       }
     });
 
@@ -296,6 +319,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
         if (error) {
             triggerHaptic('error');
+            // Revert optimistic update on error if needed, or queue for sync
             setExpenses(prev => prev.filter(e => e.id !== tempId));
         }
     } else if (isDemoMode) {
