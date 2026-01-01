@@ -93,6 +93,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       const tg = window.Telegram.WebApp;
       tg.ready();
       try { tg.expand(); } catch (e) { }
+      try { tg.requestFullscreen(); } catch (e) { }
       try {
         if (tg.version && parseFloat(tg.version) >= 6.1) {
           tg.setHeaderColor('#ffffff');
