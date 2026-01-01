@@ -30,8 +30,8 @@ const AppContent: React.FC = () => {
   // Show Auth if:
   // 1. No Session exists
   // 2. AND Not in Demo Mode
-  // 3. AND Not in Telegram Environment (or if in Telegram, unauthorized)
-  const showAuth = !authSession && !isDemoMode && !isTelegramEnv;
+  // Note: We removed !isTelegramEnv so Auth shows in Telegram if not logged in
+  const showAuth = !authSession && !isDemoMode;
 
   if (showAuth) {
       return <Auth />;
