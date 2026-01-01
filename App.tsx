@@ -12,7 +12,7 @@ type Tab = 'dashboard' | 'expenses' | 'income' | 'reports' | 'settings';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const { loading, session, isDemoMode, isTabBarHidden, triggerHaptic } = useFinance();
+  const { loading, session, isDemoMode, isTabBarHidden, triggerHaptic, isTelegramEnv, session: authSession } = useFinance();
 
   const handleTabChange = (tab: Tab) => {
     triggerHaptic('light');
@@ -27,9 +27,15 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Allow render if we have a session OR we are in demo mode
-  // If no session and not demo mode (e.g. Telegram env with anonymous auth disabled), show Auth screen
-  if (!session && !isDemoMode) {
+  // LOGIC UPDATE: 
+  // Show Auth if:
+  // 1. No Session exists
+  // 2. AND Not in Demo Mode
+  // 3. AND Not in Telegram Environment (or if in Telegram, unauthorized)
+  // This allows @Samuel_Melis to skip Auth and fall back to LocalStorage in FinanceContext
+  const showAuth = !authSession && !isDemoMode && !isTelegramEnv;
+
+  if (showAuth) {
       return <Auth />;
   }
 

@@ -40,6 +40,14 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
 const ALLOWED_USER = 'Samuel_Melis';
 
+// Helper for LocalStorage
+const LS_KEYS = {
+  EXPENSES: 'nf_expenses',
+  INCOMES: 'nf_incomes',
+  ASSETS: 'nf_assets',
+  SETTINGS: 'nf_settings'
+};
+
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -102,7 +110,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       // Strict check for Fullscreen support (Requires v8.0+)
-      // We check parsing to ensure we don't call it on v6.0
       try {
         const versionStr = tg.version;
         if (versionStr) {
@@ -114,12 +121,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
         }
       } catch (e) {
-          // Silent catch to prevent alerting users on older devices
           console.log("Fullscreen not supported:", e);
       }
       
-      // Match the App Theme and Header to Background (as fallback)
-      // Supported in v6.1+
+      // Match the App Theme
       try {
         const versionStr = tg.version;
         if (versionStr && parseFloat(versionStr) >= 6.1) {
@@ -154,7 +159,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
 
-      // DETERMINE DEMO MODE (Browser or explicit allowed user with DB issues)
+      // DETERMINE DEMO MODE
       const isDemo = !isTgPlatform; 
 
       if (mounted) {
@@ -173,31 +178,18 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
           }
         } else {
           // Attempt Anonymous Auth
-          // Note: If disabled in Supabase, this will error. We handle that gracefully.
           const { data: { session: newSession }, error } = await supabase.auth.signInAnonymously();
           
           if (error) {
-            // Check if specific error regarding anonymous auth being disabled
-            const isAnonDisabled = error.message.includes('Anonymous sign-ins are disabled');
-            
-            if (isAnonDisabled) {
-                // Not a critical error, just means user must sign in manually
-                console.log("Anonymous auth disabled, falling back to manual login.");
+            // IF anonymous auth fails (likely disabled), AND we are the authorized Telegram User,
+            // we do NOT treat this as a failure. We just fall back to LocalStorage mode.
+            if (isTgPlatform && isAllowedUser) {
+                 console.log("Supabase Auth disabled, using LocalStorage Mode for authorized user.");
+                 if (mounted) setLoading(false);
             } else {
-                console.warn("DB Connection warning:", error.message);
-            }
-
-            // If anonymous auth fails, we stop loading.
-            // App.tsx will detect !session and show the <Auth /> screen.
-            if (mounted) {
-                setLoading(false);
-            }
-
-            // Only fallback to demo data if we are NOT in the app (e.g. debugging in browser)
-            // If in app, we want to force the login screen.
-            if (isDemo && mounted && !isAnonDisabled) {
-                console.warn("Falling back to local demo mode due to DB error");
-                loadDemoData();
+                // If regular web user, we might want to fallback to demo or show auth
+                 if (mounted) setLoading(false);
+                 if (isDemo && mounted) loadDemoData();
             }
             
             clearTimeout(safetyTimeout);
@@ -211,13 +203,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
-        if (isDemo && mounted) {
-            // Fallback for demo
-            loadDemoData();
-        } else if (mounted) {
-           // Allow manual auth on error
-           setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
       clearTimeout(safetyTimeout);
     };
@@ -229,11 +215,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
-        if(!session && !isDemoMode) {
-          setExpenses([]);
-          setIncomes([]);
-          setAssets([]);
-          setSettings(INITIAL_SETTINGS);
+        // Only clear if we are NOT authorized (prevents clearing local storage data for auth'd users)
+        if(!session && !isDemoMode && !isAuthorized) {
+           // Clear state
         }
       }
     });
@@ -245,14 +229,45 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   }, []);
 
-  // 2. Fetch Data when Session is active
+  // 2. Fetch Data (Cloud OR Local)
   useEffect(() => {
-    if (session?.user && isAuthorized) {
-      fetchData();
+    // If authorized (User is allowed), try to fetch
+    if (isAuthorized) {
+      if (session?.user) {
+        fetchCloudData();
+      } else {
+        fetchLocalData();
+      }
     }
   }, [session, isAuthorized]);
 
-  const fetchData = async () => {
+  const fetchLocalData = () => {
+      try {
+          const lExp = localStorage.getItem(LS_KEYS.EXPENSES);
+          const lInc = localStorage.getItem(LS_KEYS.INCOMES);
+          const lAss = localStorage.getItem(LS_KEYS.ASSETS);
+          const lSet = localStorage.getItem(LS_KEYS.SETTINGS);
+
+          if (lExp) setExpenses(JSON.parse(lExp));
+          if (lInc) setIncomes(JSON.parse(lInc));
+          if (lAss) setAssets(JSON.parse(lAss));
+          if (lSet) {
+              setSettings(JSON.parse(lSet));
+          } else {
+             // Init settings if first time local
+             const defaultSettings = {
+                ...INITIAL_SETTINGS,
+                userName: window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Freelancer'
+            };
+            setSettings(defaultSettings);
+            localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(defaultSettings));
+          }
+      } catch (e) {
+          console.error("Error reading local storage", e);
+      }
+  };
+
+  const fetchCloudData = async () => {
     if (!session?.user) return;
     
     // Fetch Expenses
@@ -308,10 +323,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         userName: settingsData.user_name
       });
     } else {
-        // Init settings if first time
         const defaultSettings = {
             ...INITIAL_SETTINGS,
-            userName: isDemoMode ? 'Demo User' : (window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Freelancer')
+            userName: window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Freelancer'
         };
         await updateSettings(defaultSettings);
     }
@@ -323,118 +337,125 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const tempId = crypto.randomUUID();
     const newExpense = { ...expense, id: tempId };
     
-    setExpenses(prev => {
-        const updated = [newExpense, ...prev];
-        return updated.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    });
-
+    // Optimistic UI Update
+    const updatedExpenses = [newExpense, ...expenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setExpenses(updatedExpenses);
     triggerHaptic('success');
 
-    if (!session?.user) return;
-
-    const { error } = await supabase.from('expenses').insert({
-        user_id: session.user.id,
-        amount_etb: expense.amountETB,
-        category: expense.category,
-        date: expense.date,
-        is_recurring: expense.isRecurring,
-        frequency: expense.frequency,
-        note: expense.note
-    });
-
-    if (error) {
-        console.error('Error adding expense:', error);
-        triggerHaptic('error');
-        setExpenses(prev => prev.filter(e => e.id !== tempId));
+    if (session?.user) {
+        // Cloud Save
+        const { error } = await supabase.from('expenses').insert({
+            user_id: session.user.id,
+            amount_etb: expense.amountETB,
+            category: expense.category,
+            date: expense.date,
+            is_recurring: expense.isRecurring,
+            frequency: expense.frequency,
+            note: expense.note
+        });
+        if (error) {
+            console.error('Error adding expense:', error);
+            triggerHaptic('error');
+            // Revert
+            setExpenses(prev => prev.filter(e => e.id !== tempId));
+        } else {
+            fetchCloudData(); 
+        }
     } else {
-        fetchData(); 
+        // Local Save
+        localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
     }
   };
 
   const deleteExpense = async (id: string) => {
     triggerHaptic('medium');
-    setExpenses(prev => prev.filter(e => e.id !== id));
+    const updated = expenses.filter(e => e.id !== id);
+    setExpenses(updated);
     
-    if (!session?.user) return;
-    await supabase.from('expenses').delete().eq('id', id);
+    if (session?.user) {
+        await supabase.from('expenses').delete().eq('id', id);
+    } else {
+        localStorage.setItem(LS_KEYS.EXPENSES, JSON.stringify(updated));
+    }
   };
 
   const addIncome = async (income: Omit<Income, 'id'>) => {
     const tempId = crypto.randomUUID();
     const newIncome = { ...income, id: tempId };
-    setIncomes(prev => [newIncome, ...prev]);
+    const updated = [newIncome, ...incomes];
+    setIncomes(updated);
     triggerHaptic('success');
 
-    if (!session?.user) return;
-
-    const { error } = await supabase.from('incomes').insert({
-        user_id: session.user.id,
-        amount_usd: income.amountUSD,
-        source: income.source,
-        date: income.date,
-        type: income.type
-    });
-
-    if (error) {
-        console.error('Error adding income', error);
-        setIncomes(prev => prev.filter(i => i.id !== tempId));
+    if (session?.user) {
+        const { error } = await supabase.from('incomes').insert({
+            user_id: session.user.id,
+            amount_usd: income.amountUSD,
+            source: income.source,
+            date: income.date,
+            type: income.type
+        });
+        if (error) setIncomes(prev => prev.filter(i => i.id !== tempId));
+        else fetchCloudData();
     } else {
-        fetchData();
+        localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
     }
   };
 
   const deleteIncome = async (id: string) => {
     triggerHaptic('medium');
-    setIncomes(prev => prev.filter(i => i.id !== id));
+    const updated = incomes.filter(i => i.id !== id);
+    setIncomes(updated);
     
-    if (!session?.user) return;
-    await supabase.from('incomes').delete().eq('id', id);
+    if (session?.user) await supabase.from('incomes').delete().eq('id', id);
+    else localStorage.setItem(LS_KEYS.INCOMES, JSON.stringify(updated));
   };
 
   const addAsset = async (asset: Omit<Asset, 'id'>) => {
     const tempId = crypto.randomUUID();
     const newAsset = { ...asset, id: tempId };
-    setAssets(prev => [newAsset, ...prev]);
+    const updated = [newAsset, ...assets];
+    setAssets(updated);
     triggerHaptic('success');
 
-    if (!session?.user) return;
-
-    const { error } = await supabase.from('assets').insert({
-        user_id: session.user.id,
-        name: asset.name,
-        amount_usd: asset.amountUSD,
-        type: asset.type
-    });
-
-    if (error) {
-        setAssets(prev => prev.filter(a => a.id !== tempId));
+    if (session?.user) {
+        const { error } = await supabase.from('assets').insert({
+            user_id: session.user.id,
+            name: asset.name,
+            amount_usd: asset.amountUSD,
+            type: asset.type
+        });
+        if (error) setAssets(prev => prev.filter(a => a.id !== tempId));
+        else fetchCloudData();
     } else {
-        fetchData();
+        localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
     }
   };
 
   const deleteAsset = async (id: string) => {
     triggerHaptic('medium');
-    setAssets(prev => prev.filter(a => a.id !== id));
+    const updated = assets.filter(a => a.id !== id);
+    setAssets(updated);
     
-    if (!session?.user) return;
-    await supabase.from('assets').delete().eq('id', id);
+    if (session?.user) await supabase.from('assets').delete().eq('id', id);
+    else localStorage.setItem(LS_KEYS.ASSETS, JSON.stringify(updated));
   };
 
   const updateSettings = async (newSettings: Partial<Settings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
 
-    if (!session?.user) return;
-
-    const dbSettings: any = {};
-    if (newSettings.exchangeRate !== undefined) dbSettings.exchange_rate = newSettings.exchangeRate;
-    if (newSettings.savingsGoalUSD !== undefined) dbSettings.savings_goal_usd = newSettings.savingsGoalUSD;
-    if (newSettings.recurringEnabled !== undefined) dbSettings.recurring_enabled = newSettings.recurringEnabled;
-    if (newSettings.userName !== undefined) dbSettings.user_name = newSettings.userName;
-    
-    dbSettings.user_id = session.user.id;
-
-    await supabase.from('user_settings').upsert(dbSettings);
+    if (session?.user) {
+        const dbSettings: any = {};
+        if (newSettings.exchangeRate !== undefined) dbSettings.exchange_rate = newSettings.exchangeRate;
+        if (newSettings.savingsGoalUSD !== undefined) dbSettings.savings_goal_usd = newSettings.savingsGoalUSD;
+        if (newSettings.recurringEnabled !== undefined) dbSettings.recurring_enabled = newSettings.recurringEnabled;
+        if (newSettings.userName !== undefined) dbSettings.user_name = newSettings.userName;
+        
+        dbSettings.user_id = session.user.id;
+        await supabase.from('user_settings').upsert(dbSettings);
+    } else {
+        localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(updated));
+    }
   };
 
   const resetData = async () => {
@@ -445,19 +466,27 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
        setAssets([]);
        setSettings(INITIAL_SETTINGS);
 
-       if (!session?.user) return;
-       
-       await supabase.from('expenses').delete().eq('user_id', session.user.id);
-       await supabase.from('incomes').delete().eq('user_id', session.user.id);
-       await supabase.from('assets').delete().eq('user_id', session.user.id);
-       await supabase.from('user_settings').delete().eq('user_id', session.user.id);
-       await updateSettings(INITIAL_SETTINGS);
+       if (session?.user) {
+           await supabase.from('expenses').delete().eq('user_id', session.user.id);
+           await supabase.from('incomes').delete().eq('user_id', session.user.id);
+           await supabase.from('assets').delete().eq('user_id', session.user.id);
+           await supabase.from('user_settings').delete().eq('user_id', session.user.id);
+           await updateSettings(INITIAL_SETTINGS);
+       } else {
+           localStorage.removeItem(LS_KEYS.EXPENSES);
+           localStorage.removeItem(LS_KEYS.INCOMES);
+           localStorage.removeItem(LS_KEYS.ASSETS);
+           localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+       }
     }
   };
 
   const signOut = async () => {
       triggerHaptic('light');
-      await supabase.auth.signOut();
+      if (session) await supabase.auth.signOut();
+      // If local mode, "signing out" doesn't strictly make sense, but we could clear local data if we wanted. 
+      // For now, we just reload the page or do nothing, but UI will likely stay authorized if in Telegram.
+      window.location.reload();
   };
 
   return (
@@ -474,7 +503,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       deleteAsset,
       updateSettings,
       resetData,
-      session: isAuthorized ? session : null, // Only expose session if authorized
+      session: isAuthorized ? session : null, 
       signOut,
       loading: loading,
       isDemoMode: isDemoMode,
